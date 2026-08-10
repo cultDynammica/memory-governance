@@ -1,1 +1,3 @@
 Two documents. Epistemic Governance for Agent Memory argues that AI memory systems need explicit lifecycle management, not just storage, and lays out how that might work, along with experiments designed to kill the idea early if it's wrong. Dependency Structure as a Necessary Condition for Continual Learning makes the harder theoretical claim underneath it, and states plainly what isn't solved yet.
+
+new doc: +func -fear. a step by step guide to dealing with difficult repulsive emotional states. 
