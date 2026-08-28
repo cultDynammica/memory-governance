@@ -1,546 +1,578 @@
 # Epistemic Governance for Agent Memory
-## Longitudinal Status Management for Persistent Knowledge Stores
+# PAPER1
 
-**v1.1**
-
----
-
-## 1. The Problem
-
-Persistent memory systems for LLM agents have converged on a common architecture: extract claims from interaction, store them in a graph or vector index alongside embeddings, retrieve them on demand. These systems answer *where knowledge should be stored*. They do not answer *what a claim's epistemic status is* — what earns durable storage, what yields to better evidence, what is retired when it stops mattering, and how much confidence a claim deserves given what stands behind it.
-
+v2.2 — adds execution discipline (§5.11), scale-appropriate competence in reference disagreement (§5.8), two missing terms in the compression bound (§7.2), correction latency as a health metric (§11.4), and one open problem that was in no paper (§13.11).
+1. The Problem
+Persistent memory systems for LLM agents have converged on a common architecture: extract claims from interaction, store them in a graph or vector index alongside embeddings, retrieve them on demand. These systems answer where knowledge should be stored. They do not answer what a claim's epistemic status is — what earns durable storage, what yields to better evidence, what is retired when it stops mattering, and how much standing a claim deserves given what stands behind it.
 That second question is the subject of this proposal. Current systems address it with heuristics — recency, similarity, occasional staleness marking — or not at all.
-
-**Two lines of evidence that the gap costs something.**
-
-*Cascade propagation fails measurably.* When a fact changes, every claim licensed by that fact may need to change with it. In manuscript-revision settings, where this can be measured directly against a controlled fact graph, five LLM editing systems span Edit-Ripple Adherence of roughly 0.15–0.71, with even the strongest missing about 30% of required downstream updates. The parameter-editing literature (§2.3) reports the same class of failure from a different angle — edits that succeed locally while dependent facts remain stale — though without a single comparable headline metric. These are adjacent threads, not one: manuscript revision measures a model rewriting text, parameter editing measures a model's internal beliefs. Both indicate the same absent capability.
-
-*Growth is structurally unbounded.* The argument here is asymptotic rather than empirical, which makes it stronger. Support-edge storage is O(claims × mean fan-out), worst case O(n²); provenance is O(claims × sources per claim); regression-set closure over uncertain edges is O(V·E) to precompute. Nothing in an accumulate-and-link architecture reduces any of these. Published footprint measurements vary by more than fivefold across systems and are heavily design-dependent — one widely-cited figure above 600k tokens per conversation reflects a specific choice to cache a full summary at every graph node, and comes from a competitor's benchmark, while comparable systems report closer to 118k against a 632k baseline. The measurements are too design-sensitive to anchor a claim; the asymptotics are not.
-
-**The diagnosis this proposal rests on.** Both problems trace to one absence. A system that does not represent **what depends on what** cannot propagate an update to its consequences, cannot determine what an update would break, and cannot compress redundant structure because it cannot identify redundancy.
-
-### 1.1 Terminology
-
-**"Claim"** means an *individuable behavioral abstraction* — a regularity in system behavior that can be identified, tracked, and evaluated as a unit. It does not mean a parameter location, a stored proposition, or a symbolic record. In a retrieval store, a claim is provisionally operationalized as a cluster of entries that co-activate above threshold; whether such clusters correspond to stable behavioral units is what T0.1 tests, and it is the first and highest-severity experiment in this proposal's own build order. The companion paper treats the individuation problem in full; the definition is stated here because the experiment lives here.
-
-**"Protection"** is a resistance weight attached to a claim, not a physical partition. Higher protection means an update touching that claim requires more evidence and more validation to proceed.
-
-### 1.2 Scope
-
-This proposal addresses **declarative** knowledge acquired **after deployment**, in **single-agent** systems with **explicit retrieval**.
-
-- *Declarative only.* Procedural knowledge — reasoning strategies, tool-use patterns, formatting habits — has no evidence trail, no independently corroborating instances, and no bounded set of downstream dependents, so the machinery here has nothing to attach to. This boundary is conceptually clean but **operationally leaky**: systems like MemGPT routinely extract habits and rules as structured notes, which will land in the declarative store regardless of scope. The practical requirement is a filter that detects procedural content and declines to govern it, and no such filter is specified here.
-- *Post-deployment only.* §3.3 states the cost rather than minimizing it, and proposes a partial route across the boundary.
-- *Single-agent only.* In multi-agent or federated deployments, provenance clustering and exclusion lookup become distributed-consistency problems. Whether one agent's promoted claim should affect another's status, and whether provenance counts as independent across agents, are unaddressed.
-- *Explicit retrieval required.* Forced by a measurement constraint (§3.2), not chosen.
-
----
-
-## 2. Related Work
-
-### 2.1 Truth maintenance (1977–1990s)
-
+Two lines of evidence that the gap costs something.
+Cascade propagation fails measurably. When a fact changes, every claim licensed by that fact may need to change with it. In manuscript-revision settings, where this can be measured directly against a controlled fact graph, five LLM editing systems span Edit-Ripple Adherence of roughly 0.15–0.71, with even the strongest missing about 30% of required downstream updates. The parameter-editing literature (§2.3) reports the same class of failure from a different angle — edits that succeed locally while dependent facts remain stale — though without a single comparable headline metric. These are adjacent threads, not one: manuscript revision measures a model rewriting text, parameter editing measures a model's internal beliefs. Both indicate the same absent capability.
+Growth is structurally unbounded. The argument here is asymptotic rather than empirical, which makes it stronger. Support-edge storage is O(claims × mean fan-out), worst case O(n²); provenance is O(claims × sources per claim); regression-set closure over uncertain edges is O(V·E) to precompute. Nothing in an accumulate-and-link architecture reduces any of these. Published footprint measurements vary by more than fivefold across systems and are heavily design-dependent, too sensitive to design choices to anchor a claim; the asymptotics are not.
+The diagnosis this proposal rests on. Both problems trace to one absence. A system that does not represent what depends on what cannot propagate an update to its consequences, cannot determine what an update would break, and cannot compress redundant structure because it cannot identify redundancy.
+1.1 The central falsifiable claim
+Beyond the two measured failures above, this proposal makes one diagnostic bet that is testable on existing models with no new architecture:
+A system absorbing information as fact-additions when the situation demands reorganizing the framework that interprets those facts will degrade in a way distinguishable from ordinary staleness. Each update looks locally acceptable while global structure deteriorates, because the required reorganization never happens.
+T0.2 tests this and can end a substantial part of the program. The claim is stated here rather than alongside its mechanism because the mechanism (§8.2) is optional and the claim is not — if the degradation ratio comes back near 1.0, the routing taxonomy collapses to binary and several sections below lose their motivation.
+1.2 Terminology
+"Claim" means an individuable behavioral abstraction — a regularity in system behavior that can be identified, tracked, and evaluated as a unit. It does not mean a parameter location, a stored proposition, or a symbolic record. In a retrieval store, a claim is provisionally operationalized as a cluster of entries that co-activate above threshold; whether such clusters correspond to stable behavioral units is what T0.1 tests, and it is the first and highest-severity experiment in this proposal's own build order.
+"Protection" is a resistance weight attached to a claim, not a physical partition. Higher protection means an update touching that claim requires more evidence and more validation to proceed.
+"Standing" is a claim's position in the store — its protection weight, its decay resistance, its eligibility to be cited as support by other claims. Standing is distinct from evidence, denominated differently, and issued by the governance layer rather than supplied by the world. §5.3 states the conditions under which issuing it is legitimate.
+1.3 Scope
+This proposal addresses declarative knowledge acquired after deployment, in single-agent systems with explicit retrieval.
+Declarative only. Procedural knowledge — reasoning strategies, tool-use patterns, formatting habits — has no evidence trail, no independently corroborating instances, and no bounded set of downstream dependents, so the machinery here has nothing to attach to. This boundary is conceptually clean but operationally leaky: systems like MemGPT routinely extract habits and rules as structured notes, which will land in the declarative store regardless of scope. The practical requirement is a filter that detects procedural content and declines to govern it, and no such filter is specified here.
+Post-deployment only. §3.3 states the cost rather than minimizing it, and proposes a partial route across the boundary.
+Single-agent only. The exclusion is not merely a deferral of distributed-consistency problems. A panel of models supplies reduction of single-model idiosyncrasy in adjudication, which is a real benefit, and does not supply external constraint, because a channel between peers carries no setpoint. What makes the reference layer (§5.8) constraining is not that it originates elsewhere but that it terminates in a format change the system cannot run backwards; another model of the same kind is not such a channel, however differently trained. A model with retrieval or tool access is a partial exception — it carries a borrowed transductive limb — but the constraint it then supplies is inherited from whatever its tools terminate in, which is the constraint the reference layer already provides at lower cost. §8.6 specifies a multi-agent mechanism for the one disposition class where single-model idiosyncrasy is unrecoverable, and marks it as out of scope for the experiments here.
+Explicit retrieval required. Forced by a measurement constraint (§3.2), not chosen.
+2. Related Work
+2.1 Truth maintenance (1977–1990s)
 The nearest antecedent is roughly forty years old, and most of this proposal's structural components have direct ancestors in it.
-
-Dependency-directed backtracking (Stallman & Sussman 1977) traced the dependency of deductions to focus search, ensuring that on finding a conflict, search retreats far enough to actually remove the inconsistency. Doyle's JTMS (1979) was the first domain-independent truth maintenance system: it records data, their justifications, and revises beliefs when assumptions change or contradictions arise — operating on the *reasons* for beliefs rather than their content. de Kleer's ATMS (1986) explicitly represents the assumption sets under which each fact is believed, thereby maintaining multiple mutually inconsistent contexts simultaneously and tracking minimal inconsistent environments as *nogoods*. Uncertainty extensions followed: probabilities on ATMS assumptions (de Kleer & Williams 1987), Dempster-Shafer belief in Doyle's TMS (Falkenhainer 1988), possibilistic logic for uncertain ATMS knowledge (Lang & Prade 1990).
-
-| Component here | Antecedent |
-|---|---|
-| Support edges | JTMS justifications |
-| Exclusion edges | ATMS nogoods |
-| Domain-scoped coexistence (§7.4) | ATMS multiple simultaneous contexts |
-| Confidence propagation (§7.5) | Probabilistic / DS / possibilistic TMS |
-| Provenance and audit | TMS justification-based explanation |
-| Blast radius | Dependency-directed backtracking |
-
-Two lessons carry beyond citation. **A scaling warning:** TMS design features were understood to directly determine the computational expense of relying on one, and justification-network maintenance at scale is a substantial part of why the approach lost ground to statistical methods. This is the strongest available argument that compression (§6.4) is load-bearing rather than optional. **An inherited problem:** Doyle observed that humans exhibit "burn-in," where long-standing beliefs come to be believed independently of their reasons, and explicitly declined to study it. That is the entrenchment ratchet (§7.2), named in 1979 and set aside.
-
-### 2.2 Agent memory systems
-
+Dependency-directed backtracking (Stallman & Sussman 1977) traced the dependency of deductions to focus search, ensuring that on finding a conflict, search retreats far enough to actually remove the inconsistency. Doyle's JTMS (1979) was the first domain-independent truth maintenance system: it records data, their justifications, and revises beliefs when assumptions change or contradictions arise — operating on the reasons for beliefs rather than their content. de Kleer's ATMS (1986) explicitly represents the assumption sets under which each fact is believed, thereby maintaining multiple mutually inconsistent contexts simultaneously and tracking minimal inconsistent environments as nogoods. Uncertainty extensions followed: probabilities on ATMS assumptions (de Kleer & Williams 1987), Dempster-Shafer belief in Doyle's TMS (Falkenhainer 1988), possibilistic logic for uncertain ATMS knowledge (Lang & Prade 1990).
+Component here
+Antecedent
+Support edges
+JTMS justifications
+Exclusion edges
+ATMS nogoods
+Domain-scoped coexistence (§6.11)
+ATMS multiple simultaneous contexts
+Confidence propagation (§6.10)
+Probabilistic / DS / possibilistic TMS
+Provenance and audit
+TMS justification-based explanation
+Blast radius
+Dependency-directed backtracking
+Two lessons carry beyond citation. A scaling warning: TMS design features were understood to directly determine the computational expense of relying on one, and justification-network maintenance at scale is a substantial part of why the approach lost ground to statistical methods. This is the strongest available argument that compression (§7.2) is load-bearing rather than optional. An inherited problem: Doyle observed that humans exhibit "burn-in," where long-standing beliefs come to be believed independently of their reasons, and explicitly declined to study it. That is the entrenchment ratchet (§5.5), named in 1979 and set aside.
+2.2 Agent memory systems
 MemGPT/Letta treats the model as an operating system managing memory across a main context, a recall store, and an archival store, with the model paging via function calls. Zep/Graphiti (Rasmussen et al. 2025) maintains a temporally-aware knowledge graph synthesizing conversational and structured data with explicit temporal validity. A-MEM (Xu et al. 2025) stores memories as structured notes, links them dynamically, and updates existing notes as new information arrives. Mem0 implements a three-tier hierarchy across user, session, and agent scopes combining vector, graph, and key-value storage. Mem-α learns memory construction via reinforcement learning — the most direct alternative to a hand-specified policy, and a baseline rather than a competitor.
-
 Existing benchmarks: LOCOMO, LongMemEval, Deep Memory Retrieval (DMR).
-
-**The gap:** these systems largely treat the graph as a persistent store of extracted facts; the *evolution* of memory over time is not modeled.
-
-### 2.3 Knowledge editing and ripple effects
-
-The RippleEdits benchmark (Cohen et al. 2024) evaluates the downstream consequences of a single parameter edit across categories including logical generalization, compositionality, subject aliasing, preservation, and relation specificity, finding that current methods frequently fail to keep updates consistent. That literature already treats **blast radius as a measured variable**: changing the country of Rome entails many follow-up changes, while updating a person's siblings is comparatively local. GradSim (Qin et al. 2024) finds gradient similarity strongly correlated with successful ripple propagation. ChainEdit pairs knowledge-graph-derived logical rules with model reasoning for chain updates; RAKEL applies graph transformers to the same problem; MQuAKE evaluates via multi-hop questions and finds degradation as logical depth increases.
-
-This work optimizes **single-edit correctness in parameters**. It does not manage claim status across many edits over long horizons, which is the complement addressed here. The manuscript-revision measurements in §1 are a separate thread that happens to quantify the same failure class more legibly.
-
-### 2.4 Contribution
-
-1. **Longitudinal status governance** — promotion earned across contexts, demotion with deliberate threshold asymmetry, disuse decay, entrenchment management.
-2. **Independence-weighted evidence accumulation**, defending specifically against a system counting its own reflected output as corroboration.
-3. **Comparative-advantage adjudication** with a worked treatment of the entrenchment ratchet.
-4. **Four-way routing** with an explicit accommodation class, and the falsifiable diagnostic claim that schema-change information forced through an assimilation path is a distinct failure mode from ordinary staleness.
-5. **An objective function** from which the above derive rather than being independently motivated.
-
-Framed accurately: this is a synthesis and formalization, not an invention of the substrate.
-
----
-
-## 3. Objective and Scope
-
-### 3.1 Objective function
-
-> **Maximize expected predictive performance on future queries, per unit of protected capacity and per unit of governance compute, subject to bounded degradation on held-out competence and bounded miscalibration.**
-
-Formally: maximize `E[performance] / (C_protected + λ·C_governance)` subject to (a) degradation on the held-out regression set ≤ `δ`, (b) calibration error ≤ `ε`.
-
-Three notes on the terms.
-
-**Protected capacity is operationalized** as `Σ(protection weight × fan-out)` over consolidated claims. This is not raw storage — it measures how much of the store is resistant to change *weighted by how much depends on it*, which is the quantity that actually constrains plasticity. Both factors are already computed for other purposes.
-
-**Governance compute is a first-class cost.** Without it, a system can satisfy every performance and degradation constraint while becoming too expensive to run. Its inclusion is also what makes the cost hierarchy (§8.7) a derived consequence rather than an independently motivated engineering convention.
-
-**Calibration is bounded separately** because accuracy does not capture it. Two systems answering equally well differ materially if one knows when it is uncertain and the other does not, and this framework computes confidence everywhere (§7.5) without any term rewarding that confidence being *correct*. `ε` closes that gap.
-
-Seven mechanisms derive from this rather than requiring separate justification:
-
-| Mechanism | Derivation |
-|---|---|
-| Disuse decay (§7.3) | Protected capacity is scarce; protection on unused claims is pure denominator |
-| Compression (§6.4) | Reduces capacity consumed per unit of competence |
-| Cost hierarchy (§8.7) | Governance compute is in the denominator; a stage changing no outcome is negative-value |
-| Domain-scoped coexistence (§7.4) | Two scoped claims cost less capacity than a reconciliation covering both domains |
-| Threshold hysteresis (§7.2) | Thrashing consumes capacity and governance compute while violating (a) |
-| Independence weighting (§7.1) | False promotion consumes capacity without buying performance |
-| Confidence propagation (§7.5) | Stale confidence downstream of a weakened premise violates (b) |
-
-**On "maximize predictive performance" versus "retain contradictory models" (§7.4):** these are compatible only because performance is evaluated *per context*. The objective is expected performance over the query distribution, and two claims with disjoint applicability domains never compete on the same query. This is not a global single model being optimized; it is a portfolio whose members are scored where they apply.
-
-### 3.2 Why explicit retrieval is required
-
-Reliability (§5) requires per-claim contribution estimates. The only affordable estimator is **retrieval-conditioned accuracy** — comparing performance on queries where a claim was retrieved against where it was not — which exists only where retrieval is explicit. Ablation and causal tracing are accurate but too expensive to run continuously. This is a consequence of needing a cheap signal, not an architectural preference.
-
-### 3.3 The pretraining boundary, and a route across it
-
-Knowledge acquired during pretraining is treated as a base the gate governs additions to but does not itself revisit. Retroactive audit requires claim decomposition and edge inference across the entire model — the same problem as §4.4 at vastly larger scale.
-
+The gap: these systems largely treat the graph as a persistent store of extracted facts; the evolution of memory over time is not modeled.
+2.3 Knowledge editing and ripple effects
+The RippleEdits benchmark (Cohen et al. 2024) evaluates the downstream consequences of a single parameter edit across categories including logical generalization, compositionality, subject aliasing, preservation, and relation specificity, finding that current methods frequently fail to keep updates consistent. That literature already treats blast radius as a measured variable: changing the country of Rome entails many follow-up changes, while updating a person's siblings is comparatively local. GradSim (Qin et al. 2024) finds gradient similarity strongly correlated with successful ripple propagation. ChainEdit pairs knowledge-graph-derived logical rules with model reasoning for chain updates; RAKEL applies graph transformers to the same problem; MQuAKE evaluates via multi-hop questions and finds degradation as logical depth increases.
+This work optimizes single-edit correctness in parameters. It does not manage claim status across many edits over long horizons, which is the complement addressed here.
+2.4 Self-amending systems
+Suber's Nomic (1982) models a rule system in which changing the rules is a legal move, and establishes two results this proposal depends on. First, a rule designated non-amendable cannot be amended directly — it must first be transmuted into an amendable rule, which is itself a move requiring the ordinary procedure. Change of status precedes change of content, as a separate and separately recorded act. §5.7 adopts this. Second, self-amendment generically produces states in which the resulting rules are contradictory or insufficient to determine what is permitted — which are the two informative states of the evidence ledger (§5.1), reached from rule dynamics rather than from logic. Suber further observed that a program written to track the rule state and adjudicate validity would require continual modification to keep pace with the changes it tracks; §13.4 is that observation in this setting, and it remains unresolved. SoliNomic (2022) encodes the transmutation structure as tamper-evident self-modifying code, and is the nearest implemented analogue.
+2.5 Contribution
+Framed accurately: this is a synthesis, and the contribution is the control architecture that Dempster-Shafer, AGM belief revision, truth maintenance, and reinforcement theory form when assembled around persistent agent memory — not a set of novel mechanisms. Almost every component here has an antecedent, and the antecedents are cited above. What has not been done is the assembly, the derivation of the components from a single objective, and the specification of what the assembled system may and may not do.
+Five things are new in that assembly:
+Longitudinal status governance — promotion earned across contexts, demotion with deliberate threshold asymmetry, disuse decay, entrenchment management.
+A two-sided evidence ledger replacing scalar confidence, preserving the distinction between unknown and contested (§5.1).
+Adjudication by charge with dispositions ordered by reversibility, and a two-stage terminal path (§7.3–7.4).
+Negative authority as a stated constraint on the governance layer, with the one operation that violates it isolated and bounded (§5.3, §7.2).
+An objective function from which the above derive rather than being independently motivated.
+3. Objective and Scope
+3.1 Objective function
+Maximize expected predictive performance on future queries, per unit of protected capacity and per unit of governance compute, subject to bounded degradation on held-out competence and bounded miscalibration.
+Formally: maximize E[performance] / (C_protected + λ·C_governance) subject to (a) degradation on the held-out regression set ≤ δ, (b) calibration error ≤ ε.
+Protected capacity is operationalized as Σ(protection weight × fan-out) over consolidated claims. This is not raw storage — it measures how much of the store is resistant to change weighted by how much depends on it, which is the quantity that actually constrains plasticity. Both factors are already computed for other purposes.
+Governance compute is a first-class cost. Without it, a system can satisfy every performance and degradation constraint while becoming too expensive to run. Its inclusion is also what makes the cost hierarchy (§8.1) a derived consequence rather than an independently motivated engineering convention.
+Calibration is bounded separately because accuracy does not capture it. Two systems answering equally well differ materially if one knows when it is uncertain and the other does not, and this framework computes standing everywhere without any term rewarding that standing being warranted. ε closes that gap, and §5.3 makes it load-bearing: it is the only quantity in the framework against which the governance layer's own discretion can be scored.
+Mechanisms deriving from this rather than requiring separate justification:
+Mechanism
+Derivation
+Disuse decay (§6.8)
+Protected capacity is scarce; protection on unused claims is pure denominator
+Compression (§7.2)
+Reduces capacity consumed per unit of competence — but see §3.4
+Cost hierarchy (§8.1)
+Governance compute is in the denominator; a stage changing no outcome is negative-value
+Domain-scoped coexistence (§6.11)
+Two scoped claims cost less capacity than a reconciliation covering both domains
+Threshold hysteresis (§5.5)
+Thrashing consumes capacity and governance compute while violating (a)
+Independence weighting (§6.9)
+False promotion consumes capacity without buying performance
+Confidence propagation (§6.10)
+Stale confidence downstream of a weakened premise violates (b)
+On "maximize predictive performance" versus "retain contradictory models" (§6.11): these are compatible only because performance is evaluated per context. The objective is expected performance over the query distribution, and two claims with disjoint applicability domains never compete on the same query. This is not a global single model being optimized; it is a portfolio whose members are scored where they apply.
+3.2 Why explicit retrieval is required
+Reliability (§6.6) requires per-claim contribution estimates. The only affordable estimator is retrieval-conditioned accuracy — comparing performance on queries where a claim was retrieved against where it was not — which exists only where retrieval is explicit. Ablation and causal tracing are accurate but too expensive to run continuously. This is a consequence of needing a cheap signal, not an architectural preference.
+3.3 The pretraining boundary, and a route across it
+Knowledge acquired during pretraining is treated as a base the gate governs additions to but does not itself revisit. Retroactive audit requires claim decomposition and edge inference across the entire model — the same problem as §6.4 at vastly larger scale.
 The cost, stated plainly:
-
-1. The least-vetted knowledge in the system is what cannot be governed. Pretraining corpora contain error, duplication, and contradiction — what independence weighting exists to catch — and that portion carries no provenance.
-2. **A functional hole, not merely a scope limit.** Exclusion-edge lookup (§6.1) is the cheapest and most-used conflict signal here, and it only fires between two claims *both in the graph*. When a new claim contradicts something known only in weights, there is no edge to look up, and the conflict is invisible to the gate's primary mechanism.
-
-**Route across the boundary: lazy materialization.**
-
-*Detection.* Query with retrieval suppressed and with retrieval active, and compare. Disagreement between the unaided model and a graph claim is a conflict signal against pretrained knowledge, obtainable with no weight-space addressability (**T1.4**).
-
-*Localization.* Detection alone identifies that a conflict exists, not what is contradicted — which is too coarse to govern. But localization is available offline: ablate retrieved claims one at a time and observe which ablation makes the suppressed-versus-active disagreement disappear. Cost is bounded by the size of the retrieved set, which is small, and the operation runs off the serving path.
-
-*Materialization.* Once localized, instantiate a **pseudo-node** representing the pretrained belief — a claim with unknown provenance, a fixed prior confidence, and an exclusion edge to the graph claim it contradicts. The pseudo-node cannot be demoted, because there is no evidence trail to re-evaluate. But it is now *visible*: exclusion lookup fires, coexistence adjudication applies, and a well-corroborated graph claim can **outrank** it on retrieval within a domain where evidence exists.
-
-This converts a hard exclusion into a soft prior, and it materializes the pretrained base incrementally — only where conflicts actually surface, never wholesale. It does not make pretrained knowledge governable. It makes pretrained knowledge *contestable*, which is most of what the primary mechanism needed.
-
-**Where the boundary bites least:** when the deployment target is an agent's accumulated knowledge about a user, a codebase, or an organization, little of that knowledge is pretrained, and it is also where knowledge is most recent, most uncertain, and most exposed to manipulation. The scope is *most complete* there — but not complete, since schema change occurs in user-preference evolution and organizational restructuring, and schema-change execution is unsolved (§13.2).
-
----
-
-## 4. The Dependency Substrate
-
-### 4.1 Edge classes
-
-| Class | Semantics | Use |
-|---|---|---|
-| **Support** | A's correctness depends on B | Regression-set construction; blast radius; fan-out |
-| **Exclusion** | A and B cannot both hold within domain D | Contradiction detection; coexistence adjudication |
-| **Provenance** | A was established by evidence from source/context S | Independence weighting; re-evaluation; audit |
-
-Edges carry **confidence**, not binary presence. A regression set built from low-confidence support edges is a low-confidence regression set, and that uncertainty must propagate into decisions rather than being dropped.
-
+The least-vetted knowledge in the system is what cannot be governed. Pretraining corpora contain error, duplication, and contradiction — what independence weighting exists to catch — and that portion carries no provenance.
+A functional hole, not merely a scope limit. Exclusion-edge lookup is the cheapest and most-used conflict signal here, and it only fires between two claims both in the graph. When a new claim contradicts something known only in weights, there is no edge to look up, and the conflict is invisible to the gate's primary mechanism.
+Route across the boundary: lazy materialization, specified in §8.3 and classified as optional. The route exists; the hole is survivable without it.
+Where the boundary bites least: when the deployment target is an agent's accumulated knowledge about a user, a codebase, or an organization, little of that knowledge is pretrained, and it is also where knowledge is most recent, most uncertain, and most exposed to manipulation. The scope is most complete there — but not complete, since schema change occurs in user-preference evolution and organizational restructuring, and schema-change execution is unsolved (§13.2).
+3.4 What the objective cannot price, and why it is not a discount-rate problem
+Governance compute enters as pure cost, but some governance operations are investments. Abstraction spends compute now to reduce protected capacity later. Bootstrap seed edges spend manual effort once to improve every subsequent inference. Derivation-trace instrumentation costs at capture and pays at every later query. §12 sequences the build order on exactly this logic while the objective it claims to derive from cannot represent the reasoning, and a myopic optimizer against the objective as written never runs abstraction.
+The obvious repair is a discount rate on future protected capacity. That repair does not fit the problem, and saying why matters more than the repair itself.
+A discount rate corrects for a cost and a benefit arriving at different times in the same denomination. Abstraction's is not that case. Its compute cost is denominated in governance compute and lands in the consolidation budget; its benefit is denominated in protected capacity and lands in the retrieval budget. The two are not the same quantity at two times. They are two quantities, and the ratio in §3.1 is a single-perspective accounting that cannot represent a transfer between them.
+This is the general form of a problem well understood in program evaluation: where the party bearing a cost is not the party receiving the benefit, a single aggregate figure conceals the transfer, and the standard treatment is to report the objective from more than one perspective and to make the transfer itself a measured output rather than a rounding decision.
+Recommended treatment. Report the objective from two perspectives — a consolidation perspective in which governance compute is the binding cost, and a serving perspective in which protected capacity is — and report the transfer between them as a first-class quantity. Operations whose cost and benefit land in different perspectives are identified as such rather than priced into one.
+This is a resolution rather than a repair, and it changes the status of the item: the claim that compression derives from the objective is not pending a better estimate of some parameter. It is false as stated, because the derivation crosses a boundary the objective does not represent. §13.10 records what would be needed to make it true.
+4. Reading This Document
+The architecture below is ordered by what a deployment needs first, not by how the components fit together conceptually and not by the order they should be built in.
+Three tiers, then a partition.
+Part I — Necessary. §5 is the cheap spine: high utility, high efficiency, low implementation cost. Most of it is bookkeeping and constraint rather than machinery, and a deployment that implements only §5 has real capability. §6 is the substrate and the status loop — high utility, materially harder. §7 is expensive and unavoidable: costly components with nothing that substitutes for them.
+The partition is marked after §7. Everything before it is load-bearing; the system does not work without it.
+Part II — Helpful. §8 collects structures that improve the system without being required. Each states what it buys and what its absence costs. A reader may stop at the partition and have a complete, defensible architecture.
+Part III — Deployment obligations. §9 is orthogonal to the utility ordering. It is not optional-because-helpful; it is legally required in deployment and architecturally optional, which is a different axis entirely and would be misrepresented by placing it on this one.
+Three cautions about this ordering.
+Document order is not build order. §12 is a separate, differently-ordered sequence, and where they conflict, §12 governs construction. The shadow store (§7.1) is expensive and sits in Tier C, but it must be built third, because every measurement taken before it exists must be re-taken. Abstraction (§7.2) is likewise earlier in the build than its position here suggests.
+One necessary component cannot be fully bounded. Abstraction is above the partition because unbounded growth makes it unavoidable, and it is the single operation that violates §5.3's authority constraint in a way this proposal cannot close. That is uncomfortable, it is stated here rather than left to be discovered, and §7.2 gives the bounding that is available and names the part that is not.
+The tiers reflect a cost structure worth noticing. Nearly everything in §5 is a detector or a constraint — a cheap query against data already stored, or a rule about what a component may do. Nearly everything in §7 is a generator or a validator. The partition falls close to the line between mechanisms that make failure visible and mechanisms that produce something, which is consistent with the framework's orientation toward avoiding falsehood rather than acquiring truth.
+PART I — NECESSARY
+5. The Cheap Spine
+Every item in this section is low-cost, low-difficulty, and load-bearing. Several are constraints rather than components and cost nothing to adopt beyond the discipline of adopting them.
+5.1 The two-sided ledger
+Scalar confidence loses the distinction that matters most: two claims at 0.5 are in entirely different situations if one has no evidence and the other has substantial evidence on both sides. The framework therefore maintains, per claim, a two-sided ledger (e⁺, e⁻) in log-likelihood-ratio units, source-attributed.
+w = e⁺ − e⁻ — net weight. Which way the evidence points.
+τ = e⁺ + e⁻ — resolution. How much has been spent finding out.
+Low τ is a gap: nothing known. High τ with w ≈ 0 is a glut: known contested. These are Belnap's N and B, reached here from the requirements of governance rather than from four-valued logic, and both are informative states requiring different responses — a gap warrants investigation, a glut warrants scoping (§6.11) or adjudication (§7.3).
+The initial state is derived rather than chosen. (0,0) is the maximum-entropy prior, and a new claim begins there.
+Certainty is asymptotic in both directions. No finite evidence reaches w = ±∞, which is why log-odds is the natural coordinate and why any rule stated as a credence band is suspect: 0.5 is not a weak belief but the absence of one, and a rule that triggers there triggers at the prior.
+Falsity for universal claims is binary. One valid counterexample is terminal, and no quantity of confirming instances defeats it. This does not conflict with a graded ledger, because the gradation relocates: it is not in the verdict but in whether the counterexample is admissible. All uncertainty in a terminal disposition is uncertainty about the refuting evidence, never about the inference from it. §7.4 is built on this relocation. The framework does not supply a criterion for which claims are universal, which is a gap (§13.6).
+5.2 The provenance partition
+τ partitions by whether a contribution's provenance terminates outside the governed system: τ = τ_ext + τ_int. Only τ_ext constitutes external constraint. τ_int records the store agreeing with itself, which is a real signal about internal coherence and is not evidence about the world.
+The partition costs one flag per summand and is read by four of the framework's failure detectors (§10.A). It is the single highest-ratio addition in the document.
+5.3 Negative authority
+The governance layer's authority is removal-only. It may suspend, refuse, decline to promote, relax protection, void evidence, or record terminally. It may not assert, create, or corroborate.
+The reason is that a layer with positive authority can manufacture the evidence that justifies its own decisions, and no external check catches this, because the manufactured evidence is internally well-formed. The framework's own derivation: if the governance layer may assert, it is a source; if it is a source, independence weighting applies to it; but the component computing independence weights is that same layer, so its weight on its own contribution is self-assigned, and self-assigned weight is not weight.
+Promotion tests this constraint and passes only conditionally. On the evidence ledger, promotion is plainly subtractive: evidence arrived from outside, the layer declined to intervene, and w moved because the evidence moved it. On standing, promotion is generative: protection weight is not transferred from anywhere, has no external referent, is denominated differently from evidence with no stated exchange rate, and is issued by the layer applying a threshold the layer holds. Both descriptions are accurate, and the framework must say which object the constraint governs.
+It governs both, and promotion is a bounded exception rather than a non-violation. The bounding condition is that a discretionary decision is legitimate when it is scored against a standard the deciding component declared in advance and cannot quietly revise:
+Promotion asserts standing, in one currency, and the assertion is scored against ε. If protection systematically outruns what the ledger warrants, calibration degrades and the promotion threshold is demonstrably wrong. Three procedural conditions make that scoring real: ε is declared before the promotions it scores; revision of ε or of the promotion threshold is a separate act from any promotion decision; and revisions are recorded with what was adduced (§5.7).
+The promotion threshold is a balance point, not a tuning parameter. Set too low, false claims acquire protection and capacity is consumed without performance bought. Set too high, true claims never earn standing, the store cannot consolidate, and every query re-derives from scratch. Both failure modes are in §3.1, and stating the threshold this way gives errors a direction: protection outrunning corroboration is one side, τ accumulating without promotion is the other, and both are visible in signals already stored.
+Abstraction is the one operation this bounding does not reach (§7.2). Inferred edges may be a second (§6.4, §13.7).
+5.4 Derivation-trace instrumentation
+Instrument the agent to emit a trace whenever a claim is produced by reasoning over other claims. The dependency is then observed rather than inferred — the only non-inferential source of edges available, and it costs almost nothing to capture if built in from the start.
+Two properties make this Tier A despite being an input to Tier B machinery. It is nearly free at capture and pays at every later query. And it cannot be retrofitted: history not instrumented is history lost, so the cost of deferring it is unbounded while the cost of adopting it is a logging call.
+Mark system-generated content at the provenance layer from the same moment, and exclude it from independence counts by construction (§10.4).
+5.5 Hysteresis, double jeopardy, and the entrenchment ratchet
+Three cheap rules addressing one family of problems.
+Hysteresis. The bar to overturn exceeds the bar to establish. Without asymmetry, a system at equilibrium oscillates whenever evidence is noisy near threshold, converting protected storage into unprotected storage. Differentiated thresholds to suppress boundary oscillation is the principle behind Schmitt triggers and switch debouncing — cited as existence proof that the technique works, not as a claim of deeper analogy.
+Double jeopardy. A claim acquitted on a charge may not be re-tried on the same charge without new evidence. Without this, repeated challenge is itself a mechanism of entrenchment: survive enough attacks and a claim looks battle-tested regardless of whether anything was learned.
+Survived-challenge credit decays. If surviving a challenge raises standing, each failed challenge raises the next bar regardless of whether the incumbent remains correct, so early claims with weak first challengers could become effectively unfalsifiable. This is partly desirable — resistance to revision is part of what makes structure foundational — and is a designed bias that must be named as one. Decay survived-challenge credit with time and with drift in surrounding context, so standing earned under conditions that no longer hold does not persist. Growth in that credit must be strictly sublinear: under Rubin's theorem the linear case converges to a random, path-dependent limit rather than to balance, which means linear reinforcement does not merely entrench slowly but entrenches arbitrarily.
+Note that the ratchet is a predicted consequence of §5.3 rather than an independently observed pathology. Promotion asserts standing; standing compounds; a mechanism that adds standing without evidence is exactly what an authority constraint should be expected to leak into.
+5.6 Constraint-capture detection
+Four detectors, each a query against data already stored, all four instances of one failure. Specified in §10.A rather than duplicated here.
+They are Tier A because they cost nothing beyond the ledger and the provenance partition, and because without them four of the framework's most consequential failures are silent.
+5.7 Policy lineage and transmutation
+Policy parameters update from consolidation history, so past outcomes recalibrate future evaluation. This is the framework's own most exposed surface, and two cheap mechanisms make it auditable.
+Policy lineage. Every change to a policy parameter is recorded as an append-only entry: prior value, new value, the evidence adduced, the outcome window that evidence was drawn from, and a hash of the preceding entry. The record is not summarized and not compacted. Detection: an entry whose adduced evidence falls within an outcome window the prior value generated (§10.21).
+Transmutation precedes amendment. Any change to a parameter designated non-adaptive requires a transmutation proceeding, recorded and separate from the amendment itself. The parameter cannot be adjusted in the same operation that decides it should be adjustable, and the two acts must not share a justification. Adapted from §2.4.
+A parameter with high τ_int and no τ_ext has been tuned entirely against itself, which is the same diagnosis §10.20 makes about claims, applied one level up.
+Both are trivial to add at the start and expensive to reconstruct later, which is why they sit here rather than with the adaptive policy layer they govern (§8.4).
+5.8 The reference layer as bounded evidence
+The gate must be validated against something it did not select. Reference observations enter the ledger as evidence with high but bounded weight, carrying their own provenance and their own τ, subject to the same admissibility charges as any other source. They are not exempt; they are well-attested by default.
+Three consequences follow, and the third is the reason for the treatment. Bounded weight is enforceable, so repeated assertion from one reference source is one summand repeated rather than many, exactly as §6.9 treats any correlated origin. Disagreement becomes bidirectional: when a well-corroborated region of the serving graph persistently disagrees with the reference layer, that is a conflict between two evidenced positions rather than automatically the serving graph being wrong. And persistent disagreement concentrated in one reference-source cluster is an internal signal that the channel has drifted, available without external audit — where previously drift was detectable only from outside.
+Bidirectional does not mean symmetric. The two sources have di
+. The Substrate and the Status Loop
+High utility, materially harder than §5. This is the machinery the cheap spine reads.
+6.1 Edge classes
+Class
+Semantics
+Use
+Support
+A's correctness depends on B
+Regression-set construction; blast radius; fan-out
+Exclusion
+A and B cannot both hold within domain D
+Contradiction detection; coexistence adjudication
+Provenance
+A was established by evidence from source/context S
+Independence weighting; re-evaluation; audit
+Edges carry confidence, not binary presence. A regression set built from low-confidence support edges is a low-confidence regression set, and that uncertainty must propagate into decisions rather than being dropped.
 Exclusion edges are the operationally important class: they convert contradiction detection from a computation into a lookup, and they are domain-scoped by construction, which makes coexistence representable rather than special-cased.
-
-### 4.2 What the substrate buys — a worked example
-
-Abstract statements of benefit do not build intuition. Consider a five-claim store in a codebase agent:
-
-- **C1**: "The auth service validates tokens against Redis."
-- **C2**: "Token validation is synchronous." *(supports: C1)*
-- **C3**: "Login latency is dominated by token validation." *(supports: C2)*
-- **C4**: "Redis runs in the same availability zone as auth." *(supports: C1)*
-- **C5**: "Session data is stored in Postgres." *(independent of C1–C4)*
-
-A new claim arrives: **C1′** — "The auth service validates tokens locally against a cached JWKS."
-
-**Without dependency edges.** The system sees a claim similar to C1 and different from it. Its options are to overwrite C1, store both, or apply a recency heuristic. C2, C3, and C4 are untouched, because nothing records that they depend on C1. The store now asserts local validation *and* that validation is synchronous against Redis in a co-located zone — an incoherent state, silently, with no signal that anything is wrong. This is the cascade failure the §1 measurements quantify.
-
-**With dependency edges.** C1′ triggers an exclusion-edge lookup against C1: fires. Blast radius is computed as the support-closure of C1 — {C2, C3, C4}, size 3, moderately connected. That is bounded, not distributed, so routing is Generative-slow rather than Mutual (§6.1). Regression set is constructed as the closure of claims *not* depending on C1 — which is {C5} plus whatever else the store holds independently — so C1 and its dependents are correctly excluded from validating their own replacement. C1′ must clear promotion criteria independently (§7.1), and if it does, comparative adjudication runs on the shared domain (§7.2). On promotion, confidence propagation (§7.5) attenuates through C2, C3, and C4 rather than leaving them asserting stale premises at full confidence — C4 in particular ("same availability zone") loses most of its relevance, and its utilization will fall, and decay will eventually relax its protection (§7.3) without anyone having to refute it.
-
-The difference is not that the second system is more cautious. It is that the second system can *see the consequences of an update*, and the first cannot see them in principle. Every mechanism in §§5–8 is a policy applied to information only the second system has.
-
-### 4.3 Costs
-
-| Operation | Cost | Note |
-|---|---|---|
-| Provenance storage | O(claims × sources per claim) | Needs pruning tied to §7.3 |
-| Support edge storage | O(claims × mean fan-out); worst case O(n²) | The binding growth constraint |
-| Regression closure | O(V+E) cached per query; O(V·E) precomputed | Why §4.2's bounding is mandatory |
-| Independence clustering | O(s²) naive; O(s log s) with LSH | Corpus-dedup tooling transfers |
-| Confidence propagation | O(k) for attenuation depth k | Bounded by threshold, not graph size |
-| Exclusion lookup | O(1)–O(log n) indexed | Cheapest useful signal here |
-| Motif detection | O(n × motif size) sampled; higher exhaustive | Offline batch only (§6.4) |
-
-Published footprint figures are too design-sensitive to serve as targets (§1). The asymptotics above are the operative constraint, and governance overhead now appears in the objective (§3.1) so that it cannot grow silently.
-
-### 4.4 Edge construction and the bootstrap problem
-
-Edges must be obtained, and edge inference has the same pathologies as claim consolidation: spurious edges (correlation read as dependency), missing edges, stale edges. A false support edge corrupts regression construction; a false exclusion edge triggers spurious demotion; a missing exclusion edge lets contradictions consolidate silently.
-
-**The bootstrap problem is real and was previously understated.** The substrate requires governance (edges need status), and governance requires the substrate (status decisions read edges). Starting from pure inference means the first governance decisions are made on the least reliable edges the system will ever have, and errors made then propagate into everything built on top.
-
-**Bootstrap protocol.** Begin with a seed edge set that is not inferred:
-
-1. **Derivation traces.** Instrument the agent to emit a trace whenever a claim is produced by reasoning over other claims. The dependency is then *observed rather than inferred* — the only non-inferential source available, and it costs almost nothing to capture if built in from the start.
-2. **Manually verified seeds** for the store's highest-fan-out region, where errors are most consequential.
-3. **Synthetic contradictions** with known ground truth, used to calibrate exclusion-edge inference before it is trusted on real data.
-
-Inference extends from that seed rather than constituting the whole graph, and inferred edges are marked as such so that confidence reflects provenance.
-
+6.2 What the substrate buys — a worked example
+Consider a five-claim store in a codebase agent:
+C1: "The auth service validates tokens against Redis."
+C2: "Token validation is synchronous." (supports: C1)
+C3: "Login latency is dominated by token validation." (supports: C2)
+C4: "Redis runs in the same availability zone as auth." (supports: C1)
+C5: "Session data is stored in Postgres." (independent of C1–C4)
+A new claim arrives: C1′ — "The auth service validates tokens locally against a cached JWKS."
+Without dependency edges. The system sees a claim similar to C1 and different from it. Its options are to overwrite C1, store both, or apply a recency heuristic. C2, C3, and C4 are untouched, because nothing records that they depend on C1. The store now asserts local validation and that validation is synchronous against Redis in a co-located zone — an incoherent state, silently, with no signal that anything is wrong. This is the cascade failure the §1 measurements quantify.
+With dependency edges. C1′ triggers an exclusion-edge lookup against C1: fires. Blast radius is computed as the support-closure of C1 — {C2, C3, C4}, size 3, moderately connected. Regression set is constructed as the closure of claims not depending on C1 — {C5} plus whatever else the store holds independently — so C1 and its dependents are correctly excluded from validating their own replacement. C1′ must clear promotion criteria independently (§6.7), and if it does, adjudication runs on the shared domain (§7.3). On promotion, confidence propagation (§6.10) attenuates through C2, C3, and C4 rather than leaving them asserting stale premises at full weight — C4 in particular loses most of its relevance, its utilization will fall, and decay will eventually relax its protection (§6.8) without anyone having to refute it.
+The difference is not that the second system is more cautious. It is that the second system can see the consequences of an update, and the first cannot see them in principle.
+6.3 Costs
+Operation
+Cost
+Note
+Provenance storage
+O(claims × sources per claim)
+Needs pruning tied to §6.8
+Support edge storage
+O(claims × mean fan-out); worst case O(n²)
+The binding growth constraint
+Regression closure
+O(V+E) cached per query; O(V·E) precomputed
+Why blast-radius bounding is mandatory
+Independence clustering
+O(s²) naive; O(s log s) with LSH
+Corpus-dedup tooling transfers
+Confidence propagation
+O(k) for attenuation depth k
+Bounded by threshold, not graph size
+Exclusion lookup
+O(1)–O(log n) indexed
+Cheapest useful signal here
+Motif detection
+O(n × motif size) sampled; higher exhaustive
+Offline batch only (§7.2)
+6.4 Edge construction and the bootstrap problem
+Edge inference has the same pathologies as claim consolidation: spurious edges (correlation read as dependency), missing edges, stale edges. A false support edge corrupts regression construction; a false exclusion edge triggers spurious demotion; a missing exclusion edge lets contradictions consolidate silently.
+The bootstrap problem. The substrate requires governance (edges need status), and governance requires the substrate (status decisions read edges). Starting from pure inference means the first governance decisions are made on the least reliable edges the system will ever have, and errors made then propagate into everything built on top.
+Bootstrap protocol. Begin with a seed edge set that is not inferred: derivation traces (§5.4); manually verified seeds for the store's highest-fan-out region, where errors are most consequential; and synthetic contradictions with known ground truth, used to calibrate exclusion-edge inference before it is trusted on real data. Inference extends from that seed rather than constituting the whole graph, and inferred edges are marked as such so that confidence reflects provenance.
 Sources for inference, in order of preference: gradient similarity (correlated with ripple propagation, §2.3); co-retrieval statistics; ablation-measured behavioral coupling (accurate, expensive, offline only).
-
-**Edge status uses fixed thresholds rather than the adaptive policy layer.** This is a deliberate simplification to keep the recursion shallow, not a derived result — it is the reason the framework does not obviously regress infinitely, and it is untested. If fixed edge thresholds prove inadequate, the termination question in §13.4 becomes live.
-
----
-
-## 5. Signals
-
+Edge status uses fixed thresholds rather than the adaptive policy layer. This is a deliberate simplification to keep the recursion shallow, not a derived result — it is the reason the framework does not obviously regress infinitely, and it is untested. If fixed edge thresholds prove inadequate, the termination question in §13.4 becomes live.
+An unresolved authority question. Inferred support and exclusion edges are asserted by the governance layer and have no provenance terminating outside it. Under §5.3's test this makes edge inference a candidate second violation of negative authority, and arguably a more consequential one than abstraction, since edges are what propagation runs on and a false edge routes status changes to the wrong claims silently. The framework currently treats structure as categorically different from content, which may be right — a relation is not a claim — but the distinction is assumed rather than argued. §13.7.
+6.5 Decision signals
 One quantity cannot drive six decisions. Decomposed:
-
-| Decision | Signal | Definition | Cost |
-|---|---|---|---|
-| Promote | **Reliability** | Consistency of contribution across contexts, weighted by *effective independent* corroboration | Moderate; batchable offline |
-| Demote | **Comparative advantage** | Challenger vs. incumbent *on their shared applicability domain only* | Moderate; rare |
-| Decay | **Utilization** | Retrieval recency and frequency; no quality judgment | Near-free byproduct of use |
-| Replay priority | **Fragility** | Susceptibility to disruption by pending updates | Moderate; offline |
-| Conflict weight | **Fan-out** | Out-degree and cluster connectivity over support edges | Cheap query |
-| Compression trigger | **Motif frequency** | Recurrence of a dependency subgraph pattern across regions | Cheap; offline batch |
-
+Decision
+Signal
+Definition
+Cost
+Promote
+Reliability
+Consistency of contribution across contexts, weighted by effective independent corroboration
+Moderate; batchable offline
+Demote
+Comparative advantage
+Challenger vs. incumbent on their shared applicability domain only
+Moderate; rare
+Decay
+Utilization
+Retrieval recency and frequency; no quality judgment
+Near-free byproduct of use
+Replay priority
+Fragility
+Susceptibility to disruption by pending updates
+Moderate; offline
+Conflict weight
+Fan-out
+Out-degree and cluster connectivity over support edges
+Cheap query
+Compression trigger
+Motif frequency
+Recurrence of a dependency subgraph pattern across regions
+Cheap; offline batch
 Demotion is comparative rather than requiring two calibrated absolute thresholds. Decay is decoupled from correctness, so obsolete claims need not be actively refuted — refutation does not scale. Fan-out is structural rather than measured.
-
-### 5.1 Reliability is latent, not measured
-
-Retrieval-conditioned accuracy is affordable but does not measure Reliability directly, and the failure is systematic in two directions. A claim rarely retrieved but always correct when retrieved scores high — while contributing little. A claim retrieved constantly but sometimes omitted because adjacent claims answer instead scores lower — while carrying more value.
-
-Treat Reliability as a **latent quantity with several noisy indicators**: retrieval-conditioned accuracy (cheap, high-variance), sampled ablation delta (expensive, low-variance), and fan-out (free, weakly informative). Estimate it with a simple measurement model rather than a single statistic. This changes what the cheap signal must satisfy: it no longer needs to be *accurate*, only an unbiased indicator with characterizable variance — which is a substantially weaker and more achievable requirement, and which T1.2 tests directly.
-
-### 5.2 A systematic bias worth naming once
-
-Four signals here are derived from observed retrieval: Utilization, Reliability, observed applicability domain (§7.4), and co-retrieval-inferred edges (§4.4). All four are biased toward frequently-retrieved claims. The consequence is one bias appearing in four places: **the framework governs high-traffic knowledge well and low-traffic knowledge badly.**
-
-This is backwards for safety-critical knowledge, which is often rare — an emergency procedure, a rarely-triggered constraint, a security invariant. Left unmitigated, such claims accumulate empty applicability domains, low measured Reliability, and falling Utilization, and decay will relax their protection precisely because nothing has needed them.
-
-**Mitigation: a rarity floor.** Claims flagged high-stakes receive a protection floor regardless of Utilization, and are exempt from applicability-domain narrowing. This requires an external annotation channel — the framework cannot identify high-stakes-but-rare knowledge from usage data, since the absence of usage is the whole problem. That dependency on outside labeling is a genuine limitation and should be stated as one rather than engineered around.
-
----
-
-## 6. Routing
-
-| Route | Operation | Analogue |
-|---|---|---|
-| **Supplemental** | Used to produce output; nothing durable changes | — |
-| **Generative** | Fits existing structure; integrates without reorganizing it | Assimilation |
-| **Mutual** | Cannot integrate unless the receiving structure reorganizes | Accommodation |
-| **Abstractive** | Existing structure is compressed into a higher-order claim | Concept formation (aspirationally) |
-
-### 6.1 Criteria
-
-1. Salience below threshold → **Supplemental**.
-2. Above threshold, no exclusion edge, low graph-local conflict → **Generative**, fast path.
-3. Above threshold, conflict **bounded** (small, weakly-connected cluster) → **Generative**, slow path; offline with heavier regression testing.
-4. Above threshold, conflict **distributed** (large or highly-connected cluster, or a high-fan-out claim contradicted) → **Mutual**.
-5. Triggered by graph state rather than a candidate → **Abstractive**.
-
-Criteria 3 and 4 turn on blast radius, which the ripple-effect literature already treats as measurable — the distinction has external support rather than resting on assertion. The worked example in §4.2 walks a criterion-3 case end to end.
-
-### 6.2 The diagnostic claim
-
-The failure this addresses: a system that keeps absorbing information as fact-additions when it actually demands reorganizing the framework that interprets those facts. Each update looks locally acceptable while global structure degrades, because the required reorganization never happens.
-
-This is testable on existing models with no new architecture (T0.2), and it is the proposal's central falsifiable diagnostic. **If T0.2 returns a degradation ratio near 1.0, routing collapses to binary and the Mutual path is dropped entirely.**
-
-### 6.3 Mutual: detection now, execution deferred
-
-Detecting the Mutual case is implementable — it is a blast-radius query. *Executing* a reorganization is a search over revised structures, and it is unsolved (§13.2).
-
-The implementable behavior on a Mutual routing decision is therefore: **do not merge, flag, defer, and log.** This is not a governance action and should not be presented as one. Its value is twofold: it prevents the specific failure of force-merging accommodation-class information, and the accumulated log is a **dataset for a future reorganization solver** — paired instances of (existing structure, contradicting candidate, human or offline resolution) are exactly what a learned or symbolic reorganizer would need for training. Structuring the log for that purpose from the start converts an unsolved execution problem into a supervised-learning target.
-
-### 6.4 Abstractive routing
-
-**Trigger:** a recurring dependency subgraph motif across multiple regions whose members show high co-retrieval.
-
-**Operation:** identify the motif; synthesize a claim X summarizing its structure; redirect external edges from the motif's members to X; **retain the source subgraph at reduced protection rather than pruning it**; accept only if X preserves regression performance where the motif did.
-
-**Motif recurrence is a heuristic for abstraction, not a mechanism for it.** Abstraction in the full sense is latent-variable discovery, and recurring structure sometimes indicates a real higher-order concept and sometimes indicates nothing but a common template. The claim here is narrow: motif frequency is a cheap, testable proxy that identifies *candidates* for compression, validated by whether the compression preserves behavior. Whether the resulting nodes constitute concept formation is not established, and T2.5 tests only the compression property.
-
-**Source retention is mandatory, with a re-derivation schedule.** X is lossy; if it is wrong, everything downstream inherits the error while the evidence needed to detect it has been destroyed. This makes abstraction the only *silent* corruption mode here (§10.9). Retention alone is insufficient without an explicit check: at a defined interval, re-evaluate X against its retained source and confirm they still license the same predictions. Only after N consecutive passing checks may decay begin relaxing the source's protection, and a failed check reverts to the source and demotes X.
-
-Abstraction runs as an **offline batch process** — knowledge-store compaction, analogous to database vacuum — never on the serving path.
-
----
-
-## 7. Status Dynamics
-
-### 7.1 Promotion
-
-A candidate accumulates Reliability across contexts with independence-weighted corroboration; promotes when the latent estimate is sufficiently precise and effective independent count suffices.
-
-Independence weighting is load-bearing. Without it, a claim repeated across correlated contexts — one source replayed, a coordinated injection, or the system encountering its own prior output — produces the same signature as genuine corroboration. The self-referential case is structurally identical to model collapse in the synthetic-data literature: any system with persistent memory whose outputs re-enter its inputs is exposed by default.
-
-**A dependency worth naming:** independence is computed over provenance edges, which are themselves subject to inference error and to the same self-reference the mechanism defends against. If the system's own output enters the provenance graph as a distinct source, clustering will read it as independent. Partial defenses: require derivation traces to carry an external timestamp or content hash; mark system-generated content at the provenance layer and exclude it from independence counts by construction; treat provenance clusters as second-order claims with their own status cycle. The first two are cheap and should be built in from the start.
-
-### 7.2 Demotion
-
-Protection is a reducible weight, reduced only through defined re-evaluation.
-
-1. A contradiction event is necessary but insufficient. Conflict is already evidence of the incumbent's *importance*, so conflict alone would make protected knowledge trivially reversible by any disruptive update.
-2. The challenger must independently clear promotion criteria first.
-3. A re-evaluation episode runs both against a regression set excluding the contested claim's dependents, drawn from the shadow store (§8.6).
-4. Adjudication is by comparative advantage on the shared applicability domain. Empty shared domain → no adjudication (§7.4).
-
-**Hysteresis.** The bar to overturn exceeds the bar to establish. Without asymmetry, a system at equilibrium oscillates whenever evidence is noisy near threshold, converting protected storage into unprotected storage. Differentiated thresholds to suppress boundary oscillation is the principle behind Schmitt triggers and switch debouncing — cited as existence proof that the technique works, not as a claim of deeper analogy.
-
-**The entrenchment ratchet.** If surviving a challenge raises standing, each failed challenge raises the next bar regardless of whether the incumbent remains correct, so early claims with weak first challengers could become effectively unfalsifiable. Partly desirable — resistance to revision is part of what makes structure foundational — but it is a designed bias and must be named as one. **Mitigation: decay survived-challenge credit** with time and with drift in surrounding context, so standing earned under conditions that no longer hold does not persist. Preferred over capping in a drifting environment.
-
-### 7.3 Disuse decay
-
-Promotion and demotion are both challenger-driven. The common case is that a claim stops mattering with nothing contradicting it. Without decay, protection accumulates monotonically until it covers enough of the store that nothing can change — the stability-plasticity problem returning by accretion rather than by any single bad decision. Stale-but-uncontested knowledge is worse than stale-and-contested, because nothing triggers review.
-
-Track retrieval recency and frequency; gradually reduce protection weight for low-utilization claims. **Not deletion** — protection is relaxed, capacity is made available. Decay is slow relative to promotion, since disuse is weak evidence of irrelevance. Decay rate is weighted inversely by peak historical Reliability, and the rarity floor (§5.2) exempts flagged claims entirely.
-
-### 7.4 Domain-scoped coexistence
-
-Not all contradictions require resolution. The system maintains **predictive models, not truths** — Newtonian and relativistic mechanics need no reconciliation to both be retained; they have different domains of predictive validity, and per §3.1 they are never scored on the same query.
-
-1. On a contradiction event, check whether the exclusion edge's domain scope is non-empty: do contexts exist where both would be invoked?
-2. Disjoint → retain both with applicability conditions. No demotion episode.
-3. Overlapping → run §7.2 scoped to the overlap.
-4. Maintain an explicit register of unreconciled contradictions as a first-class output.
-
-ATMS achieved simultaneous inconsistent contexts in 1986; the contribution here is integration with lifecycle management — domain scopes derived from **observed invocation patterns**, never from declared scope, and updated over time. Deriving scope from declaration is exploitable: a claim could evade adjudication by acquiring a narrow self-serving domain (§10.6).
-
-The cost of that choice is §5.2's bias: a correct but rarely-retrieved claim has a near-empty observed domain and may be wrongly merged or demoted. The rarity floor is the mitigation, and it is imperfect.
-
-### 7.5 Confidence propagation
-
+6.6 Reliability is latent, not measured
+Retrieval-conditioned accuracy is affordable but does not measure Reliability directly, and the failure is systematic in two directions. A claim rarely retrieved but always correct when retrieved scores high while contributing little. A claim retrieved constantly but sometimes omitted because adjacent claims answer instead scores lower while carrying more value.
+Treat Reliability as a latent quantity with several noisy indicators: retrieval-conditioned accuracy (cheap, high-variance), sampled ablation delta (expensive, low-variance), and fan-out (free, weakly informative). Estimate it with a measurement model rather than a single statistic. Fan-out may be weakly informative because it measures a different kind of quantity from the other two rather than because it is noisy; that question belongs to the companion work on relational governance and is not settled here.
+This weakens what the cheap signal must satisfy — no longer accuracy, only unbiasedness with characterizable variance — which T1.2 tests directly.
+6.7 Gated promotion
+A candidate accumulates Reliability across contexts with independence-weighted corroboration; promotes when the latent estimate is sufficiently precise and effective independent count suffices. The authority analysis for this operation is §5.3.
+6.8 Disuse decay
+Promotion and adjudication are both challenger-driven. The common case is that a claim stops mattering with nothing contradicting it. Without decay, protection accumulates monotonically until it covers enough of the store that nothing can change — the stability-plasticity problem returning by accretion rather than by any single bad decision. Stale-but-uncontested knowledge is worse than stale-and-contested, because nothing triggers review.
+Track retrieval recency and frequency; gradually reduce protection weight for low-utilization claims. Not deletion — protection is relaxed, capacity is made available. Decay is slow relative to promotion, since disuse is weak evidence of irrelevance. Decay rate is weighted inversely by peak historical Reliability, and the rarity floor (§5.9) exempts flagged claims entirely.
+6.9 Independence weighting
+Without it, a claim repeated across correlated contexts — one source replayed, a coordinated injection, or the system encountering its own prior output — produces the same signature as genuine corroboration. The self-referential case is structurally identical to model collapse in the synthetic-data literature: any system with persistent memory whose outputs re-enter its inputs is exposed by default.
+Independence is computed over provenance edges, which are themselves subject to inference error and to the same self-reference the mechanism defends against. The cheap defences are to require derivation traces to carry an external timestamp or content hash, and to mark system-generated content at the provenance layer and exclude it from independence counts by construction. Both are §5.4 and should be built in from the start.
+6.10 Confidence propagation
 If A supports B supports C and A weakens, C should be affected.
-
-`Δconf(child) = Δconf(parent) × conf(edge) × α`, with `α < 1`. Propagation halts when `Δ` falls below threshold, bounding cost to O(k) in depth.
-
-**Propagation does not trigger demotion.** It changes confidence, affecting retrieval ranking, regression weighting, and future adjudication. Status changes still require §7.2. Keeping these separate prevents one weakened premise from cascading into mass demotion.
-
+Δconf(child) = Δconf(parent) × conf(edge) × α, with α < 1. Propagation halts when Δ falls below threshold, bounding cost to O(k) in depth.
+Propagation does not trigger demotion. It changes weight, affecting retrieval ranking, regression weighting, and future adjudication. Status changes still require §7.3. Keeping these separate prevents one weakened premise from cascading into mass demotion.
 Adopt an existing TMS uncertainty formalism (probabilistic, Dempster-Shafer, or possibilistic — §2.1) rather than devising a new attenuation heuristic. Behavior under cycles in the support graph is unresolved (§13.4).
-
----
-
-## 8. The Gate
-
-Five components; four are not intelligent.
-
-### 8.1 Salience estimator
-
-Two independent factors:
-
-- **Surprise (S)** — prediction error / deviation from expectation. Already computed.
-- **Stakes (K)** — estimated consequence of error, approximated by dependency fan-out of the claims the candidate touches. Already computed for §5, so free.
-
-These are independent in a way that surprise-and-attention are not: a surprising trivium is high-S/low-K; a dull correction to something foundational is low-S/high-K.
-
-`F = αS + βK + γ(S·K)`
-
-The interaction term preserves the intuition that surprising *and* consequential deserves superlinear weight, while neither factor annihilates the other. **The functional form is a parameter to fit, not a claim**, and the fitting method is specified: inverse-variance weighting against Tier 0 regression outcomes, so α, β, γ are estimated from data rather than assumed.
-
-**F is a triage score, not a status signal.** §5 argues one quantity cannot drive six *status decisions*; F drives none of them. It decides only whether a candidate enters evaluation at all, which is a single decision and appropriately served by a single number. Attention allocation is an output: `allocation ∝ F`.
-
-### 8.2 Evidence ledger
-
-Provenance edges, per-claim signal values, retrieval statistics. A database with statistics; correctness verifiable by inspection. Privacy and retention obligations are treated in §9.
-
-### 8.3 Conflict analyzer
-
-Per-candidate gradient conflict requires a backward pass and is not viable online. Replacements in increasing cost:
-
-1. **Exclusion-edge lookup** — near-free; covers contradictions already in the graph.
-2. **Graph-local proxy** — does this contradict claims frequently co-retrieved with it?
-3. **Gradient similarity** — correlated with ripple propagation (§2.3); evaluate directly (T1.1).
-4. **Processing-friction signature** — elevated cross-entropy and divided attention under conflicting content, observable without extra passes.
-5. **Retrieval-suppressed comparison with ablation localization** (§3.3) — the only signal reaching conflicts with pretrained knowledge.
-
-True gradient-conflict measurement is offline only.
-
-*Requirement on (4):* friction signatures are also produced by ordinary ambiguity. Any experiment must include an ambiguous-but-consistent control, or the signal is equally explained by underspecification (T0.3).
-
-### 8.4 Scheduler and budget
-
-Allocates consolidation compute; schedules offline episodes; enforces §8.7. No semantics.
-
-Control signal: current processing-friction state. High friction indicates existing load, so aggressiveness falls (raise the §8.1 threshold, defer episodes); low friction indicates idle capacity. Aggressiveness becomes a function of measured state rather than a tuned constant, with a floor to prevent silent starvation (§10.13).
-
-### 8.5 Policy layer
-
-Thresholds, promotion/demotion asymmetry, decay rates, budget targets, motif thresholds. Policy parameters update from consolidation history, so past outcomes recalibrate future evaluation. Some parameters should be slow and foundational, others fast. Edge-status thresholds are deliberately excluded and held fixed (§4.4).
-
-### 8.6 External validation via a shadow store
-
-The gate must be validated against something it did not select. Deriving regression sets from the serving graph is only *partially* external: it is genuinely independent of claim status, since sets are constructed structurally rather than curated, but it is circular with respect to edge quality, because the same inferred edges under question determine what the set contains.
-
-**Resolution: a physically separate shadow store.** Maintain a second graph used *exclusively* for regression-set construction — never for retrieval, never for inference, never written to by the gate. It is refreshed periodically from external, non-agent sources: curated databases, human annotation, held-out ground truth. Regression sets drawn from it are independent of both the claims and the edges being evaluated, which closes the circularity rather than acknowledging it.
-
-Two obligations follow. **Currency:** a shadow store that is not refreshed becomes a stale benchmark, and staleness is indistinguishable from correctness from the inside. Refresh cadence is a first-class operational parameter. **Coverage:** a shadow store that drifts to cover only what is already protected constrains nothing. Measure the divergence between the shadow store's claim distribution and the serving graph's — a KL divergence over topic or region is adequate — and alarm when it exceeds threshold (§10.5).
-
-### 8.7 Cost hierarchy
-
-Each stage must be cheaper than what it gates by a wide margin: salience ≪ exclusion lookup ≪ graph-local proxy ≪ validity tracking ≪ offline episode. **A stage violating this ordering should be merged into its neighbor.**
-
+6.11 Domain-scoped coexistence
+Not all contradictions require resolution. The system maintains predictive models, not truths — Newtonian and relativistic mechanics need no reconciliation to both be retained; they have different domains of predictive validity, and per §3.1 they are never scored on the same query.
+On a contradiction event, check whether the exclusion edge's domain scope is non-empty: do contexts exist where both would be invoked?
+Disjoint → retain both with applicability conditions. No proceeding.
+Overlapping → adjudicate under §7.3, scoped to the overlap.
+Maintain an explicit register of unreconciled contradictions as a first-class output.
+ATMS achieved simultaneous inconsistent contexts in 1986; the contribution here is integration with lifecycle management — domain scopes derived from observed invocation patterns, never from declared scope, and updated over time. Deriving scope from declaration is exploitable: a claim could evade adjudication by acquiring a narrow self-serving domain (§10.6). The cost of that choice is §5.9's bias.
+An asymmetry worth noting: abstraction (§7.2) requires scope declaration while coexistence refuses it. The two are consistent because a declared scope is checkable against evidence in the abstraction case and self-serving in the coexistence case, but the framework should state the discriminator rather than let the inconsistency stand unremarked.
+7. Expensive and Unavoidable
+Costly components with nothing that substitutes for them. Each states its cost plainly.
+7.1 The shadow store
+Deriving regression sets from the serving graph is only partially external: genuinely independent of claim status, since sets are constructed structurally rather than curated, but circular with respect to edge quality, because the same inferred edges under question determine what the set contains.
+A physically separate shadow store. Maintain a second graph used exclusively for regression-set construction — never for retrieval, never for inference, never written to by the gate — refreshed periodically from external, non-agent sources: curated databases, human annotation, held-out ground truth. It implements §5.8's policy physically, and §5.8's currency and coverage obligations attach to it.
+Cost: a second store, its refresh pipeline, and its source relationships. Why unavoidable: without it, every regression measurement is circular, and every measurement taken before it exists must be re-taken. This is why it is third in the build order despite sitting in Tier C (§12).
+7.2 Abstractive routing
+Trigger: a recurring dependency subgraph motif across multiple regions whose members show high co-retrieval.
+Operation: identify the motif; synthesize a claim X summarizing its structure; redirect external edges from the motif's members to X; retain the source subgraph at full protection until the conditions below are met.
+Motif recurrence is a heuristic for abstraction, not a mechanism for it. Abstraction in the full sense is latent-variable discovery, and recurring structure sometimes indicates a real higher-order concept and sometimes indicates nothing but a common template. The claim here is narrow: motif frequency is a cheap, testable proxy that identifies candidates for compression, validated by whether the compression preserves behavior. Whether the resulting nodes constitute concept formation is not established, and T2.5 tests only the compression property.
+X enters as a candidate, not as an installation. X begins at (0,0) and accumulates its own ledger from its own retrievals and its own externally constrained predictions. It does not inherit the motif's accumulated evidence, because that evidence supports the motif's members, not the summary. Until X promotes on its own record it is retrievable but may not be cited as support by other claims.
+Acceptance on regression performance where the motif applied is not sufficient, and an earlier form of this test was inconsistent with §5.1. X is a generalization over its members — a universal, or near enough — and universals are refuted by counterexample and not established by instances. Testing X where the motif already lived is accumulating confirming instances on exactly the domain where X is guaranteed to pass. Worse, it is silent where X does its work: X is worth having only because it applies where no motif member did, so the value of X and the risk of X are both concentrated in the extension.
+X must declare its scope at synthesis, and X's ledger is scored against the declared scope rather than against its own evidence distribution. Evidence concentrated in a subregion of a wider declared scope is a gap in a nameable region, measured by the same distributional-divergence instrument §5.8 uses for reference coverage, pointed at X's evidence against X's claim.
+Declaration is bounded from both directions. Over-declare and the coverage measure exposes it. Under-declare and X is retrievable only within the narrow scope it claimed, which strips the generality that justified synthesizing it.
+Source retention runs until coverage, not until promotion. Sources buy the ability to construct a different summary; X promoting on the motif's home domain does not establish that X was the right generalization. Sources are retained until X's evidence covers X's declared scope, with re-derivation checks running over that interval. A failed check reverts to the source and demotes X.
+Two terms the coverage bound does not capture.
+Compression spends resolution at retrieval. A summary that replaces its members reduces stored structure and increases what must be supplied from context when it is retrieved — the same trade a language makes between a large vocabulary with specific definitions and a small one with high density and contextual disambiguation. Neither is better; they move cost between storage and decoding. X may satisfy coverage while requiring materially more disambiguation at retrieval than its members did, and that is a net loss the current test cannot see. Measure retrieval-time disambiguation cost before and after, and treat an increase as offsetting the capacity saved.
+A single declared scope can erase scope variance among members. If the motif's members held heterogeneous scopes and X declares one, the variation is destroyed silently and X will be applied where no member applied. Compare X's declared scope against the distribution of member scopes and flag high variance; this is the abstraction-level form of imposing a global pattern on locally-scoped units, which corrupts precisely the local information that made the units distinct.
+Abstraction runs as an offline batch process — knowledge-store compaction, analogous to database vacuum — never on the serving path.
+What remains unbounded, and why this section sits above the partition anyway. The above bounds X's content on the scope axis. It does not bound X's selection: X was drawn from an unbounded space of possible summaries and nothing establishes it was the right member of that space, because the alternatives were never enumerated. If a mediocre-but-true X installs and the sources eventually release, a better summary Y becomes permanently unreachable, since the evidence that would have supported Y lived in the members. That is an error propagating while destroying the means of its own detection — the framework's only silent corruption mode (§10.9) — and it is why abstraction remains the sole violation of §5.3 after the fixes above.
+Growth is asymptotically unbounded without compression, so the operation is necessary. It is also the operation this proposal cannot fully bound. Both are true, and §4 flags the discomfort rather than resolving it.
+7.3 Adjudication by charge
+Protection is a reducible weight, reduced only through defined re-evaluation. Adjudication is a proceeding rather than a threshold crossing.
+Preconditions. A contradiction event is necessary but insufficient — conflict is already evidence of the incumbent's importance, so conflict alone would make protected knowledge trivially reversible by any disruptive update. The challenger must independently clear promotion criteria first. Re-evaluation runs both claims against a regression set excluding the contested claim's dependents, drawn from the shadow store (§7.1). Adjudication is by comparative advantage on the shared applicability domain; an empty shared domain means no adjudication (§6.11).
+Charges. Proceedings are opened by charge, in three classes:
+Class
+Asserts
+Against the claim
+this claim has a defect
+Against the evidence
+this evidence should not count
+Against a configuration
+the arrangement that produced this is defective
+The third class is doing the most work. Most consequential failures are not a claim being wrong but a process that will keep producing wrong claims, and individual adjudication cannot see those by construction.
+Each charge carries its own standard of proof and its own admissible dispositions. Where the evidence establishes a defect but does not discriminate between two claims in an epistemic equivalence class, the disposition is non liquet — the proceeding closes without a finding, and neither claim's standing changes.
+Dispositions are ordered by reversibility, cheapest and most recoverable first. No claim may be disposed at a rung the evidence does not reach. §5.5's hysteresis and double jeopardy govern the proceeding.
+Reconcil
+PART II — HELPFUL
+8. Optional Structures
+8.1 Cost hierarchy enforcement
+Each stage should be cheaper than what it gates by a wide margin: salience ≪ exclusion lookup ≪ graph-local proxy ≪ validity tracking ≪ offline episode. A stage violating this ordering should be merged into its neighbor.
 The test is not "does this stage improve performance" but "does this stage change routing outcomes at all." A stage that changes no outcome is negative-value against §3.1's governance-compute term (T3.1).
-
----
-
-## 9. Privacy, Retention, and Consent
-
-The evidence ledger records provenance, retrieval statistics, and per-claim signal history. In a user-facing agent this constitutes a persistent, queryable, structured audit trail of user interactions — richer and more durable than conversation logs, because it records not only what was said but what the system inferred, when, on what basis, and how its confidence changed.
-
-This is not incidental to the design; provenance is the mechanism that makes independence weighting and demotion possible (§4.1). The framework's central capability and its central privacy exposure are the same artifact.
-
-Requirements, none of which are optional in a deployed system:
-
-- **Retention limits on provenance**, distinct from retention on claims. A claim may be worth keeping after the evidence trail that established it must be discarded, which means demotion becomes unavailable for that claim — an explicit, documented trade rather than a silent one.
-- **Deletion propagation.** A user deletion request must remove provenance and, where a claim rests solely on deleted evidence, demote or remove the claim. Because support edges make dependents locatable, the framework can execute this correctly — deletion propagation is one place where dependency structure is a privacy *asset*.
-- **Scope segregation** between user-specific claims and general knowledge, so that per-user deletion does not degrade shared competence.
-- **Consent for inference recording**, not merely for content storage. Users may reasonably accept that statements are retained while objecting to a durable record of what the system concluded about them.
-- **Auditability as a user-facing feature.** The same provenance that creates the exposure also allows a system to answer "why do you believe that about me?" — which is the strongest available mitigation and should be exposed rather than merely logged.
-
----
-
-## 10. Failure Modes
-
-**10.1 Claim instability** (highest severity). If claims cannot be individuated as stable units, there is nothing to govern. *Detection:* the same nominal claim yielding inconsistent Reliability or fan-out estimates under different probing methods. Tested first (T0.1).
-
-**10.2 False promotion.** Correlated corroboration evading independence weighting; retrieval-conditioned accuracy confounded by co-occurring useful claims.
-
-**10.3 False demotion.** A correct incumbent overturned by a well-corroborated wrong challenger. *Mitigations:* hysteresis; shared-domain-only adjudication; shadow-store regression sets.
-
-**10.4 Provenance self-reference.** System-generated content entering the provenance graph as an apparently independent source, defeating the mechanism designed to prevent exactly that (§7.1). *Mitigation:* mark system-generated content at the provenance layer and exclude it from independence counts by construction.
-
-**10.5 Shadow-store drift.** The regression source becomes stale or narrows to cover only protected claims. *Detection:* refresh-cadence monitoring plus KL divergence between shadow and serving distributions (§8.6).
-
-**10.6 Context spoofing.** A claim acquires a narrow applicability domain to evade adjudication, or artificially diverse contexts defeat independence weighting. *Mitigation:* scope from observed invocation only; independence as provenance connectivity rather than surface dissimilarity.
-
-**10.7 Rare-knowledge attrition.** Correct but rarely-retrieved claims accumulate empty domains, low measured Reliability, and falling Utilization, and decay relaxes their protection because nothing needed them (§5.2). *Mitigation:* rarity floor with external annotation — imperfect, since it depends on outside labeling.
-
-**10.8 Invisible pretraining conflict.** Per §3.3(2). *Mitigation:* lazy materialization via retrieval-suppressed comparison and ablation localization (T1.4).
-
-**10.9 Abstraction corruption.** A wrong abstraction propagates error downstream while destroying the evidence needed to detect it — the only silent corruption mode here. *Mitigations:* source retention at reduced protection; scheduled re-derivation checks; revert-and-demote on a failed check (§6.4).
-
-**10.10 Procedural leakage.** Procedural content extracted as structured notes enters the declarative store and is governed by machinery that does not apply to it (§1.2). *Mitigation:* a procedural-content filter, unspecified.
-
-**10.11 Oscillation.** Competing claims alternate near threshold at claim level. *Mitigation:* hysteresis; status-change frequency as a health metric.
-
-**10.12 Graph fragmentation.** Sparse or uneven edges leave regions with no usable dependency structure, so regression construction and blast-radius estimation silently degrade to guesses. *Mitigation:* per-region density monitoring; **refuse high-consequence operations in under-connected regions** rather than proceeding on a degraded query.
-
-**10.13 Compute starvation.** Under sustained load, budget-adaptive thresholds rise indefinitely and consolidation stops silently while the system appears healthy. *Mitigation:* budget floor; alarm on sustained threshold elevation.
-
-**10.14 Saturation.** Protection accumulates until nothing can change, or governance cost dominates retrieval cost. Now visible in the objective (§3.1) rather than only as a failure mode.
-
-**10.15 Adversarial consolidation** — treated as a bounded risk rather than a preventable failure; see §13.3.
-
----
-
-## 11. Experiments
-
-Tier 0 carries decision boundaries; a go/no-go without a threshold is not a go/no-go. Sample sizes below assume detecting a correlation of 0.6 against a null of 0.4 at 80% power, α = 0.05, which requires n ≈ 180 for paired comparisons — hence the ~200 figure in T0.1. Comparisons in T2.x are paired by claim wherever the same store is used under two policies.
-
-| # | Claim | Test | Boundary |
-|---|---|---|---|
-| **T0.1** | Claims are individuable as stable behavioral units | ~200 factual claims from an existing benchmark; estimate Reliability and fan-out via retrieval-conditioned accuracy, sampled ablation, and causal tracing; pairwise rank correlation | ρ ≥ 0.6 all pairs → proceed at that granularity. 0.4–0.6 → **re-run at progressively coarser granularity** (binary-search cluster size upward until ρ clears 0.6) and report the granularity at which it does. < 0.4 at every granularity → **stop** |
-| **T0.2** | Schema-change degradation is distinguishable from uniform staleness | Two matched sequences: pure fact-additions vs. items whose later members invalidate earlier organizing structure. Ratio of degradation on schema-adjacent vs. schema-neutral held-out items | ≥ 1.5 → accommodation class is real. ≈ 1.0 → collapse to binary routing, drop Mutual entirely |
-| **T0.3** | Friction signatures discriminate conflict from ambiguity | Cross-entropy and attention division under (a) conflicting, (b) ambiguous-but-consistent, (c) clean content | (a) separable from (b) and (c) → usable. (a) ≈ (b) → discard the signal |
-| **T0.4** | Baseline persistence | Does a salient event durably shift processing of unrelated inputs on unmodified models? | Establishes the baseline any mechanism must beat |
-| **T1.1** | Gradient similarity predicts conflict cheaply | Correlate gradient similarity and exclusion-edge presence against offline gradient-conflict measurement | ρ ≥ 0.5 → adopt as online proxy |
-| **T1.2** | Cheap Reliability indicators are unbiased with characterizable variance | Correlate retrieval-conditioned accuracy against sampled ablation; estimate bias and variance rather than only correlation | Unbiased with variance small enough for the §5.1 measurement model → proceed. Systematic bias → §5 needs rework |
-| **T1.3** | Independence weighting reduces false promotion | Inject low-diversity corroboration alongside genuine corroboration at matched raw counts | Any significant reduction justifies the mechanism |
-| **T1.4** | Lazy materialization detects and localizes pretraining conflict | Claims contradicting model priors vs. claims consistent with them; measure separation in suppressed-vs-active disagreement, then test whether one-at-a-time ablation identifies the responsible claim | Detection separation *and* localization accuracy above chance → §10.8 is addressable, not merely detectable |
-| **T2.1** | Governance beats accumulation | Full pipeline vs. Zep/Graphiti, Letta, A-MEM, Mem-α on LOCOMO, LongMemEval, DMR | Must win on multi-session consistency specifically |
-| **T2.2** | Demotion corrects drift without thrashing | Concept-drift environment; symmetric vs. asymmetric thresholds | Asymmetric must cut oscillation without cutting correction rate |
-| **T2.3** | Decay preserves plasticity without losing rare knowledge | Long-horizon mix of high-frequency and low-frequency-high-stakes knowledge, with and without the rarity floor | Capacity must not saturate; rare-item accuracy must hold. Failure without the floor confirms §5.2 |
-| **T2.4** | Coexistence beats forced resolution | Contradictions with disjoint applicability domains | Per-domain accuracy exceeds forced-resolution demotion |
-| **T2.5** | Abstraction reduces growth without accuracy loss | Long-horizon run with and without Abstractive routing; edge count, storage, regression performance, re-derivation check pass rate | Sub-linear growth within δ → compression works. Accuracy loss or failing re-derivation checks → §10.9 dominates |
-| **T2.6** | Signal decomposition beats a unified score | Six §5 signals vs. one score driving all status decisions; metrics: forgetting rate, false-promotion rate, protected-capacity growth, governance compute | Paired comparison on the same store under both policies |
-| **T3.1** | Per-stage null test | Disable each stage; measure whether *routing outcomes* differ | No outcome change → delete the stage |
-| **T3.2** | Governance closes the cascade gap | Against RippleEdits and MQuAKE directly, and against manuscript-revision cascade benchmarks separately, since these are distinct threads (§1) | The headline external comparison, and the answer to "couldn't better retrieval get most of this more cheaply?" |
-
----
-
-## 12. Build Order
-
-**Tier 0 — existing models, no new architecture. Go/no-go on premises.**
+This ordering governs reversible dispositions; §7.4 states the different criterion for irreversible ones.
+Why optional: it is a discipline for keeping governance overhead bounded, not a mechanism the architecture requires. Absent it, governance cost grows silently and §3.1's denominator degrades — which is a real cost, and slower-acting than anything above the partition.
+Open: the disposition ladder orders by reversibility and this hierarchy orders by expense. These are presented as unrelated and may be the same ordering, since recoverable operations are largely also cheap ones. If they coincide, one is derivable from the other and the framework claims two results where it has one.
+8.2 The routing taxonomy and the Mutual mechanism
+Route
+Operation
+Analogue
+Supplemental
+Used to produce output; nothing durable changes
+—
+Generative
+Fits existing structure; integrates without reorganizing it
+Assimilation
+Mutual
+Cannot integrate unless the receiving structure reorganizes
+Accommodation
+Abstractive
+Existing structure is compressed into a higher-order claim
+Concept formation (aspirationally)
+Criteria: below salience threshold → Supplemental. Above threshold with no exclusion edge and low graph-local conflict → Generative fast path. Above threshold with bounded conflict → Generative slow path, offline with heavier regression testing. Above threshold with distributed conflict → Mutual. Triggered by graph state rather than a candidate → Abstractive (§7.2).
+The Mutual mechanism is deferral logging, and that is why this section is below the partition. Detecting the Mutual case is implementable — it is a blast-radius query. Executing a reorganization is a search over revised structures, and it is unsolved (§13.2). The implementable behavior is: do not merge, flag, defer, and log. This is not a governance action and should not be presented as one.
+Its value is twofold: it prevents the specific failure of force-merging accommodation-class information, and the accumulated log is a dataset for a future reorganization solver — paired instances of (existing structure, contradicting candidate, resolution) are what a learned or symbolic reorganizer would need for training. Structuring the log for that purpose from the start converts an unsolved execution problem into a supervised-learning target.
+Note that §1.1's diagnostic claim is not optional even though this mechanism is. If T0.2 returns a degradation ratio near 1.0, routing collapses to binary and this section is dropped entirely.
+8.3 Lazy materialization of pretraining conflicts
+Detection. Query with retrieval suppressed and with retrieval active, and compare. Disagreement between the unaided model and a graph claim is a conflict signal against pretrained knowledge, obtainable with no weight-space addressability (T1.4).
+Localization. Ablate retrieved claims one at a time and observe which ablation makes the suppressed-versus-active disagreement disappear. Cost is bounded by the size of the retrieved set, which is small, and the operation runs off the serving path.
+Materialization. Instantiate a pseudo-node representing the pretrained belief — a claim with unknown provenance, a bounded prior weight, and an exclusion edge to the graph claim it contradicts. The pseudo-node cannot be demoted, because there is no evidence trail to re-evaluate, but its prior weight is finite and other evidence can overcome it (§10.19). It is now visible: exclusion lookup fires, coexistence adjudication applies, and a well-corroborated graph claim can outrank it on retrieval within a domain where evidence exists.
+This converts a hard exclusion into a soft prior, and materializes the pretrained base incrementally — only where conflicts surface, never wholesale. It does not make pretrained knowledge governable; it makes it contestable.
+Why optional: it closes §3.3's functional hole. The hole is real and survivable — conflicts with pretrained knowledge remain invisible without it, which degrades governance quality in a bounded and non-catastrophic way.
+8.4 The adaptive policy layer
+Thresholds, promotion/adjudication asymmetry, decay rates, budget targets, motif thresholds — updated from consolidation history so past outcomes recalibrate future evaluation. Some parameters should be slow and foundational, others fast. Edge-status thresholds are deliberately excluded and held fixed (§6.4).
+Why optional: fixed, hand-set parameters work. Adaptation improves them, at the cost of opening the framework's most exposed surface (§10.21). §5.7's lineage and transmutation rules are Tier A precisely because they must exist before this does — adopting this without them is the one combination that should be refused outright.
+8.5 The scheduler's friction signal
+Allocates consolidation compute; schedules offline episodes; enforces §8.1. No semantics.
+The control signal is friction conditioned on regional density. Friction is proportional to misalignment between an operation and the structure it runs against, not to difficulty, so the same work costs more where structure is poorly organized. Two situations produce identical readings and require opposite responses:
+Reading
+Regional density
+Correct response
+High friction
+High (§10.12 monitor)
+Genuine load. Back off, defer episodes
+High friction
+Low
+Structural misalignment. Consolidation is needed here; deferring makes it worse
+Where density is below the §10.12 threshold, high friction raises consolidation priority for that region rather than lowering it, subject to §10.12's refusal rule for high-consequence operations in the same region. A floor prevents silent starvation (§10.13).
+Why optional: a simple budget scheduler with a floor works. This improves allocation and depends on T0.3 separating friction from ambiguity; if T0.3 fails, this section is discarded and the rest of the architecture is unaffected.
+8.6 The special proceeding
+Multi-agent and therefore outside §1.3. Specified because the disposition it governs is the one class where single-model idiosyncrasy is unrecoverable.
+Five components: four limbs in two pairs drawn from a pool of at least four models of distinct training provenance, paired at random per cohort, plus one special counsel structurally separated from the pool.
+No component may assert. A pair's output is a failure to sustain an objection, and the merged output of both pairs is the same. A panel producing a verdict is asserting, and four models agreeing produces an artifact internally well-formed by construction whether or not it tracks anything.
+Roles are assigned by structural asymmetry, never by label. Within a pair, one limb holds the constraining role with respect to a declared product — the admissibility of the counterexample — and the assignment must derive from a real difference in what varies and on what timescale: differential instrument access, differential evidence access, or differential currency. Handing symmetric peers a role label produces a model instructed to behave like a constraining structure, with the label doing all the work. The constraining limb's position must not be movable by the generative limb.
+Pairs deliberate blind and in parallel. Sequential deliberation manufactures anchoring and destroys the informativeness of inter-pair agreement.
+The special counsel attacks the predicate: it argues that the admissibility question was never genuinely open. It cannot consent. Consensus is cheap among language models, and a component structurally forbidden to reach it removes the cheapest failure mode in any panel arrangement. It stands down on exhaustion, not credence — high τ with w ≈ 0 on the predicate question. A credence band around 0.5 would be the wrong coordinate: 0.5 is the prior, the rule would oppose at both 80% and 20% while standing down where least has been learned, and a scalar cannot distinguish balanced-after-investigation from not-yet-investigated. The counsel's τ threshold and effort ceiling are declared before the cohort opens and recorded; adjustment mid-cohort voids the cohort, and adjustment between cohorts is a policy change under §5.7.
+The in-scope substitute. The counsel's function is available as a charge without a second model:
+Proceeding without predicate. Charge against a configuration. The proceeding was opened where the admissibility question was not genuinely contested. Disposition: dismissal; the claim returns to normal standing. Aggravation: repeated instances traceable to one docketing configuration are chargeable against that configuration.
+That charge is in scope and belongs with §7.3. The five-limb version is not.
+8.7 The adversarial reserve
+A system that consolidates from interaction has consolidation as an attack surface, and a sufficiently distributed campaign is indistinguishable from genuine corroboration by construction. Candidate defenses — source-diversity floors, temporal-spread requirements, cryptographic attribution, challenge episodes on anomalously rapid promotion — raise cost without closing the surface.
+A budgeted reserve bounds the remainder. Allocate a fraction of protected capacity as an adversarial reserve — claims requiring external audit or high-confidence attestation to modify — with reserve size a deployment parameter traded against plasticity.
+Why optional: the framework's actual defence against adversarial input is that content clears the same bar regardless of origin (§5.3, §6.9), and that is above the partition. The reserve bounds how much of the store manipulation can reach, which is weaker than prevention and is a deployment choice about risk appetite.
+PART III — DEPLOYMENT OBLIGATIONS
+9. Privacy, Retention, and Consent
+Orthogonal to the utility ordering. Legally required in deployment, architecturally optional — which is a different axis, and placing it on the utility scale would misrepresent it in both directions.
+The evidence ledger records provenance, retrieval statistics, and per-claim signal history. In a user-facing agent this constitutes a persistent, queryable, structured audit trail of user interactions — richer and more durable than conversation logs, because it records not only what was said but what the system inferred, when, on what basis, and how its weight changed.
+This is not incidental to the design; provenance is the mechanism that makes independence weighting and adjudication possible. The framework's central capability and its central privacy exposure are the same artifact.
+Retention limits on provenance, distinct from retention on claims. A claim may be worth keeping after the evidence trail that established it must be discarded, which means adjudication becomes unavailable for that claim — an explicit, documented trade rather than a silent one.
+Deletion propagation. A user deletion request must remove provenance and, where a claim rests solely on deleted evidence, demote or remove the claim. Because support edges make dependents locatable, the framework can execute this correctly — deletion propagation is one place where dependency structure is a privacy asset.
+Scope segregation between user-specific claims and general knowledge, so that per-user deletion does not degrade shared competence.
+Consent for inference recording, not merely for content storage. Users may reasonably accept that statements are retained while objecting to a durable record of what the system concluded about them.
+Auditability as a user-facing feature. The same provenance that creates the exposure also allows a system to answer "why do you believe that about me?" — the strongest available mitigation, and it should be exposed rather than merely logged.
+A tension with §7.4. The terminal record retains the ground of decision permanently, and deletion propagation requires that evidence be removable. Vacatur exists precisely for the case where predicate evidence is voided, so the mechanisms are compatible in form: a deletion request voiding predicate evidence vacates the entry. What is not resolved is whether the record may retain a hash of deleted evidence sufficient to establish that vacatur was warranted, which is a jurisdiction-dependent question the framework should flag rather than answer.
+10. Failure Modes
+10.A Constraint capture
+Four entries below are the same failure: a check has been captured by the thing it checks. The general signature is any quantity used as a check whose construction is downstream of what it checks.
+The qualifier matters. A control system is supposed to affect the variable it reads — influence on the measured quantity is the mechanism, not the defect. Capture is the narrower case where the influence runs to the measurement rather than to the quantity measured.
+10.19 Terminal authority. Any source treated as unrevisable creates a region evidence cannot reach. Instances: pseudo-nodes assigned a prior at or near certainty (§8.3), a reference layer treated as ground truth (§5.8), and — where a panel is used — panel consensus treated as terminal. Detection: a claim whose w has not moved despite accumulating τ. Mitigation: every source has a finite maximum weight; no source has a floor other evidence cannot overcome. §7.4's terminal record is an apparent instance and is licensed by the argument given there.
+10.20 Commitment drift. Protection accumulates from reliance rather than corroboration. Utilization drives decay, decay determines protection, protection influences ranking, ranking drives utilization — so a claim acted on repeatedly gains standing with no evidence entering the loop at any point. Two claims each retrieved a thousand times, one repeatedly tested against external constraint and one never, are indistinguishable in the signal governing their protection. Distinct from 10.2, which requires evidence that evades independence weighting; this requires no evidence at all. Detection: utilization rising while τ_ext stays flat. Mitigation: cap the protection utilization alone can confer; above the cap, external resolution is required. Utilization continues to govern decay below the cap, preserving §6.8's function.
+10.21 Policy recursion. Policy thresholds are tuned against outcomes those thresholds produced. Detection: a lineage entry whose adduced evidence falls within an outcome window the prior value generated (§5.7).
+10.5 Reference-layer drift. The regression source becomes stale or narrows to cover only what is already protected. Detection: refresh-cadence monitoring, distributional divergence between reference and serving stores, and persistent serving-graph disagreement concentrated in one reference cluster (§5.8).
+10.23 Environmental drift. (New.) Measured performance improves because the query distribution shifted, not because the store improved — or degrades for the same reason while the store is fine. Every performance figure in §3.1 is computed against a query stream the framework does not control and does not monitor, so a distributional shift is attributed to governance by default.
+Distinct from the four above: the check has not been captured, it has been relocated. The store is being scored against a different population than the one it was scored against last month.
+Detection: performance change accompanied by divergence between the current query distribution and a retained baseline — the §5.8 coverage instrument, pointed at queries rather than at claims. Mitigation: retain a frozen query sample and report performance against both the live stream and the frozen sample; where they diverge, the difference is the environmental component. This costs one stored sample and one extra evaluation pass.
+This failure mode also weakens several experiments in §11, which compare performance across time or across systems without holding the query distribution fixed.
+10.24 Fidelity failure. A stage does not run, runs on truncated input, or runs outside its declared parameters, and the resulting degradation is attributed to the policy. Distinct from 10.13, which is one cause of it; a stage can also fail fidelity through a configuration error, a dependency outage, or a silent budget cut. Detection: §5.11's execution records, compared against declared parameters. Why it matters beyond the immediate loss: every performance measurement in §11 is uninterpretable without it, because a design that was not executed and a design that does not work produce the same numbers.
+10.B Remaining modes
+10.1 Claim instability (highest severity). If claims cannot be individuated as stable units, there is nothing to govern. Detection: the same nominal claim yielding inconsistent effect estimates across probing methods. Tested first (T0.1).
+10.2 False promotion. Correlated corroboration evading independence weighting; retrieval-conditioned accuracy confounded by co-occurring useful claims.
+10.3 False demotion. A correct incumbent overturned by a well-corroborated wrong challenger. Mitigations: hysteresis; shared-domain-only adjudication; shadow-store regression sets.
+10.4 Provenance self-reference. System-generated content entering the provenance graph as an apparently independent source, defeating the mechanism designed to prevent exactly that. Mitigation: mark system-generated content at the provenance layer and exclude it from independence counts by construction (§5.4).
+10.6 Context spoofing. A claim acquires a narrow applicability domain to evade adjudication, or artificially diverse contexts defeat independence weighting. Mitigation: scope from observed invocation only; independence as provenance connectivity rather than surface dissimilarity.
+10.7 Rare-knowledge attrition. §5.9's bias reaching safety-critical knowledge. Mitigation: rarity floor with external annotation — imperfect, since it depends on outside labeling.
+10.8 Invisible pretraining conflict. Per §3.3(2). Mitigation: lazy materialization (§8.3), which is optional.
+10.9 Abstraction corruption. A wrong abstraction propagates error downstream while destroying the evidence needed to detect it — the only silent corruption mode here, and the operation §5.3 independently identifies as the sole authority violation. Mitigations: scope declaration with coverage measurement; source retention until coverage; scheduled re-derivation; revert-and-demote on failure (§7.2). The selection axis remains unbounded.
+10.10 Procedural leakage. Procedural content extracted as structured notes enters the declarative store and is governed by machinery that does not apply to it (§1.3). Mitigation: a procedural-content filter, unspecified.
+10.11 Oscillation. Competing claims alternate near threshold. Mitigation: hysteresis; status-change frequency as a health metric.
+10.12 Graph fragmentation. Sparse or uneven edges leave regions with no usable dependency structure, so regression construction and blast-radius estimation silently degrade to guesses. Mitigation: per-region density monitoring; refuse high-consequence operations in under-connected regions rather than proceeding on a degraded query. This is the first instance of §5.11's competence-boundary rule and not a special case of it.
+10.13 Compute starvation. Under sustained load, budget-adaptive thresholds rise indefinitely and consolidation stops silently while the system appears healthy. Mitigation: budget floor; alarm on sustained threshold elevation.
+10.14 Saturation. Protection accumulates until nothing can change, or governance cost dominates retrieval cost. Visible in the objective (§3.1).
+10.15 Adversarial consolidation. Bounded rather than prevented; see §13.3.
+10.22 Docket floodin
+accuser (§7.4); lapse for want of prosecution; provenance-clustered failure rates chargeable against a configuration.
+11. Experiments
+Tier 0 carries decision boundaries; a go/no-go without a threshold is not a go/no-go. Sample sizes assume detecting a correlation of 0.6 against a null of 0.4 at 80% power, α = 0.05, requiring n ≈ 180 for paired comparisons.
+11.1 One methodological requirement, stated once
+A comparison across systems measures systems. Only a comparison within a standardized store measures policy.
+Two systems described by the same category — "graph memory," "agent memory" — differ in extraction, chunking, retrieval, embedding, index structure, and a dozen other choices, so an observed difference in outcome may be attributable to any of them. Statistical adjustment cannot fully repair this, because many of the relevant differences are unmeasured and some are unrecognized.
+The requirement follows: hold the environment constant and let only the tested variable vary. Where that is impossible, the experiment answers a weaker question and should say which.
+This applies unevenly below and the unevenness should be visible. T2.6 satisfies it — paired on the same store under two policies. T2.1 does not, and cannot: it compares this pipeline against Zep, Letta, A-MEM and Mem-α, which differ in every dimension above. T2.1 therefore establishes that this system outperforms those systems on those benchmarks, which is worth knowing and is not evidence that the governance policy is what did it. Wherever feasible, cross-system comparisons should be paired with a within-store ablation that isolates the same variable.
+The same discipline applies to the query distribution, per §10.23: a comparison across time with an unmonitored query stream has an uncontrolled variable in it.
+11.2 The experiments
+#
+Claim
+Test
+Boundary
+T0.1
+Claims are individuable as stable behavioral units
+~200 factual claims from an existing benchmark; estimate each claim's effect profile by retrieval-conditioned accuracy and by sampled ablation delta; rank-correlate
+ρ ≥ 0.6 → proceed at that granularity. 0.4–0.6 → re-run at progressively coarser granularity and report where it clears. < 0.4 at every granularity → stop. Reliability, utilization, and comparative advantage are all effect quantities, so unstable effects leave nothing to govern
+T0.2
+Schema-change degradation is distinguishable from uniform staleness
+Two matched sequences: pure fact-additions vs. items whose later members invalidate earlier organizing structure. Ratio of degradation on schema-adjacent vs. schema-neutral held-out items
+≥ 1.5 → accommodation class is real. ≈ 1.0 → collapse to binary routing, drop §8.2
+T0.3
+Friction signatures discriminate conflict from ambiguity
+Cross-entropy and attention division under (a) conflicting, (b) ambiguous-but-consistent, (c) clean content
+(a) separable from (b) and (c) → §8.5 usable. (a) ≈ (b) → discard §8.5
+T0.4
+Baseline persistence
+Does a salient event durably shift processing of unrelated inputs on unmodified models?
+Establishes the baseline any mechanism must beat
+T1.1
+Gradient similarity predicts conflict cheaply
+Correlate gradient similarity and exclusion-edge presence against offline gradient-conflict measurement
+ρ ≥ 0.5 → adopt as online proxy
+T1.2
+Cheap Reliability indicators are unbiased with characterizable variance
+Correlate retrieval-conditioned accuracy against sampled ablation; estimate bias and variance
+Unbiased with variance small enough for §6.6's measurement model → proceed
+T1.3
+Independence weighting reduces false promotion
+Inject low-diversity corroboration alongside genuine corroboration at matched raw counts
+Any significant reduction justifies the mechanism
+T1.4
+Lazy materialization detects and localizes pretraining conflict
+Claims contradicting model priors vs. consistent ones; measure separation, then test one-at-a-time ablation localization
+Detection separation and localization above chance → §10.8 addressable
+T2.1
+Governance beats accumulation
+Full pipeline vs. Zep/Graphiti, Letta, A-MEM, Mem-α on LOCOMO, LongMemEval, DMR
+Must win on multi-session consistency specifically. Subject to §11.1 — pair with a within-store ablation
+T2.2
+Adjudication corrects drift without thrashing
+Concept-drift environment; symmetric vs. asymmetric thresholds
+Asymmetric must cut oscillation without cutting correction rate
+T2.3
+Decay preserves plasticity without losing rare knowledge
+Long-horizon mix of high- and low-frequency knowledge, with and without the rarity floor
+Capacity must not saturate; rare-item accuracy must hold
+T2.4
+Coexistence beats forced resolution
+Contradictions with disjoint applicability domains
+Per-domain accuracy exceeds forced-resolution demotion
+T2.5
+Abstraction reduces growth without accuracy loss
+Long-horizon run with and without Abstractive routing; edge count, storage, regression performance, coverage measure, re-derivation pass rate
+Sub-linear growth within δ → compression works
+T2.6
+Signal decomposition beats a unified score
+Six §6.5 signals vs. one score driving all status decisions
+Paired comparison on the same store under both policies
+T2.7
+The terminal standard fires
+Instrument which stage terminates terminal proceedings, over a docket cohort
+A standard that never fires and one that fires only after counsel exhaustion are different results
+T2.8
+Terminal proceedings are worth their cost
+Error rate of terminal disposition without proceeding, on held-out ground truth
+Required for §7.4; without it the cost inversion is asserted
+T3.1
+Per-stage marginal value
+Disable each stage; measure whether routing outcomes differ, and report outcomes changed per unit of stage cost rather than share of total performance
+No outcome change → delete the stage. See §11.3
+T3.2
+Governance closes the cascade gap
+Against RippleEdits and MQuAKE directly, and against manuscript-revision cascade benchmarks separately
+The headline external comparison
+T3.3
+Sequence effects
+(New.) Run the same mechanism set under permuted operation orders — abstraction before vs. after a promotion cycle, adjudication before vs. after decay — on matched stores
+Outcome differences across permutations → composition is not order-independent, and T3.1's per-stage results are conditional on the order they were measured in
+T3.4
+Replication
+(New.) Re-run the validated configuration on a store of different provenance and domain, with no re-tuning
+Results hold → a framework. Results require re-tuning → a configuration fitted to one store, and the paper should say so
+11.3 Two limitations of the per-stage test
+T3.1 disables one stage at a time and measures whether routing outcomes change. Two things this does not establish.
+It measures marginal contribution holding order fixed. If governance operations interact — if abstraction run before a promotion cycle produces a different store than the same abstraction run after — then every T3.1 result is conditional on an ordering nobody tested. T3.3 is the cheapest available check and it should run before T3.1's results are used to delete anything.
+Average share is the wrong denominator. A stage's value is the outcomes it produces that would not otherwise occur, per unit of what it costs — not its fraction of total performance. The reformulation above is a reporting change, not a new experiment, and it is what §3.1's governance-compute term actually requires.
+11.4 A health metric the objective does not contain
+§3.1 measures predictive performance per unit of capacity. Nothing measures how quickly a wrong claim is corrected once the evidence to correct it has arrived.
+Correction latency: elapsed time, or number of retrievals, between refuting evidence entering the ledger and the claim's disposition changing.
+This is arguably the quantity the architecture exists to minimize. A store that answers well and corrects slowly is a store whose errors persist through everything built on them during the interval, and §3.1 registers that as a small accuracy cost at the moment of measurement rather than as the compounding structural cost it is.
+The measure is free — both timestamps are already recorded — and it separates two failures the objective conflates: a system that never receives correcting evidence, and one that receives it and does not act. It should be reported per disposition class, since a long latency on terminal disposition is deliberate (§7.4) and a long latency on demotion is not.
+12. Build Order
+Document order is not build order. §4 orders by what a deployment needs; this orders by what must exist before what else can be measured. Where they conflict, this governs construction.
+Tier 0 — existing models, no new architecture. Go/no-go on premises.
 T0.1 first (largest risk, cheapest test, hard stop), then T0.2, T0.3, T0.4.
-
-**Tier 1 — graph and vector substrate.**
-1. **Provenance store with typed, confidence-weighted edges.** Build first; get edge semantics right, since this is the one component whose design errors are not swappable later. **Instrument the agent to emit derivation traces from day one** — observed dependencies are worth more than any inference method, and retrofitting instrumentation loses all history. Mark system-generated content at the provenance layer from the start (§10.4).
-2. **Bootstrap seed edges** (§4.4) — manual verification of the highest-fan-out region, plus synthetic contradictions for calibrating exclusion inference.
-3. **Shadow store** (§8.6). Build alongside the serving graph, not after — regression validation without it is circular, and every measurement taken before it exists must be re-taken.
-4. **Reliability measurement model** (§5.1), gated by T1.2.
-5. **Independence weighting via provenance clustering** (T1.3).
-6. **Salience estimator**, fitting α, β, γ by inverse-variance weighting against Tier 0 outcomes.
-7. **Confidence propagation**, adopting an existing formalism.
-8. **Lazy materialization of pretraining conflicts** (T1.4).
-9. **Offline abstraction as a compaction process** (§6.4). Earlier than its sophistication suggests: growth is asymptotically unbounded (§4.3), the mechanism must exist before the store is large, and running it offline from the start avoids retrofitting a vacuum process onto a saturated graph.
-
-**Tier 2 — status dynamics.**
-10. **Gated promotion with disuse decay and the rarity floor.** Build decay in from the start; retrofitting capacity management onto a saturated store is much harder, and the rarity floor must exist before decay does or rare knowledge is lost during the interval.
-11. **Offline consolidation** via a replica that periodically syncs to serving copies.
-12. **Baseline comparison** (T2.1) as soon as the pipeline is minimally functional, not at the end — the fastest route to discovering which parts of this are already solved elsewhere.
-13. **Demotion with shadow-store regression** (§7.2).
-14. **Domain-scoped coexistence** (§7.4).
-15. **Mutual detection with structured deferral logging** (§6.3) — detection and dataset collection only.
-16. **Adaptive policy layer**, once history exists to adapt on.
-
-**A test that partially closes the weight-space gap.** A graph-based system has no distributed superposition and therefore no catastrophic forgetting to solve — it can validate governance logic but not that the policy addresses weight-space forgetting. Partial closure: let the gate decide which updates are applied to weights via low-rank adapters, then measure weight-space forgetting with and without gate governance. The gate operates on the retrieval layer while its *decisions* land in weights. Buildable at late Tier 2, and the earliest point at which the companion paper's representational claim becomes testable rather than merely motivating.
-
----
-
-## 13. Open Problems Blocking Completion
-
-The architecture in §§4–12 is buildable. The problems below are not solved, and none is solved by having been named precisely. They are the research agenda, and a reader should weigh the proposal knowing that §13.1 and §13.2 are load-bearing.
-
-### 13.1 Claim individuation
-
-Everything above assumes stable claim objects. T0.1 tests whether they exist and at what granularity, and the test can end the program. A middle result — individuation stable only at coarse granularity — is not a pass: it changes the unit of governance from claim to cluster, which weakens what an exclusion edge means (cluster-level contradiction is a weaker and blurrier relation than claim-level) and makes comparative adjudication harder to scope. The proposal has no worked-out version at cluster granularity.
-
-### 13.2 Mutual execution
-
-Detecting that a candidate requires structural reorganization is implementable. Performing the reorganization is a search over revised structures and is unsolved. Consequences: the framework's central diagnostic claim (§6.2) identifies a failure mode it cannot repair, only refuse to compound. Any domain where schema change occurs — user-preference evolution, organizational restructuring, codebase refactoring — is therefore only partially covered, including the domains §3.3 identifies as the best fit. Structured logging (§6.3) is a dataset-collection strategy toward a solver, not a substitute for one.
-
-### 13.3 Adversarial consolidation is bounded, not prevented
-
-A system that consolidates from interaction has consolidation as an attack surface, and a sufficiently distributed campaign is indistinguishable from genuine corroboration *by construction*. Candidate defenses — source-diversity floors, temporal-spread requirements so nothing promotes faster than a minimum wall-clock window, cryptographic attribution for external sources, challenge episodes triggering automatic audits on anomalously rapid promotion — raise cost without closing the surface.
-
-**Reframing rather than solution:** treat this as a budgeted risk. Allocate a fraction of protected capacity as an **adversarial reserve** — claims in the reserve require external audit or high-confidence attestation to modify, and the reserve's size is a deployment parameter traded against plasticity. This does not prevent manipulation; it bounds how much of the store manipulation can reach. That is a weaker guarantee than prevention and should be presented as one.
-
-### 13.4 Recursion termination
-
-Policy parameters adapt from history (§8.5). Edge status uses fixed thresholds specifically to stop the regress (§4.4), but that is a simplification rather than a result, and it is untested. Confidence propagation under cycles in the support graph is unresolved. Whether the whole control structure terminates or admits pathological configurations is open.
-
-### 13.5 No convergence results
-
-Nothing here establishes that the Reliability estimate converges, that hysteresis stabilizes rather than merely slowing oscillation, that blast radius correlates with required restructuring, or that comparative demotion converges rather than cycling among near-equivalent claims. For a control loop this is a substantive omission.
-
-The tractable next step is to state the assumptions a proof would need rather than to produce one: under (a) evidence arriving as an ergodic process, (b) unbiased independence weighting, (c) hysteresis thresholds bounded away from zero, and (d) a finite claim space, does comparative demotion converge? Making the assumption set explicit converts a vague gap into a specific open question, and would reveal quickly whether any of the assumptions are ones this architecture cannot satisfy.
-
-### 13.6 Procedural filtering
-
-The declarative scope is operationally leaky (§1.2), and no filter is specified for detecting procedural content that arrives as structured notes. Until one exists, some fraction of the store will be governed by machinery that does not apply to it.
-
----
-
-## 14. Summary
-
-Current agent memory systems answer where knowledge should be stored. This proposal argues that persistent agents also require explicit policies for how knowledge earns trust, retains protection, yields to better evidence, and eventually leaves memory — and that all four require representing what depends on what.
-
-The framework treats memory not as a passive record of accepted facts but as a store whose epistemic state is itself subject to governance: claims are promoted on independence-weighted evidence, challenged comparatively with deliberate hysteresis, allowed to coexist where their domains of validity are disjoint, compressed when their structure recurs, and retired when nothing depends on them any longer.
-
-Tier 0 can end the program in four experiments, and should be run before anything is built.
-
--Enzø
+Tier 1 — graph and vector substrate.
+Provenance store with typed, confidence-weighted edges. Build first; edge semantics are the one design error not swappable later. Instrument derivation traces from day one (§5.4) — observed dependencies are worth more than any inference method, and retrofitting loses all history. Mark system-generated content at the provenance layer from the start.
+Bootstrap seed edges (§6.4).
+Shadow store (§7.1). Build alongside the serving graph, not after — regression validation without it is circular, and every measurement taken before it exists must be re-taken. This is the clearest case where build order and document order diverge.
+Two-sided ledger with provenance partition (§5.1–5.2). Cheap, and every later detector reads it.
+Retain a frozen query sample (§10.23). Costs almost nothing at the start; cannot be reconstructed later.
+Reliability measurement model (§6.6), gated by T1.2.
+Independence weighting via provenance clustering (§6.9, T1.3).
+Salience estimator (§5.10), fitting α, β, γ by inverse-variance weighting against Tier 0 outcomes.
+Confidence propagation (§6.10), adopting an existing formalism.
+Offline abstraction as a compaction process (§7.2). Earlier than its cost suggests: growth is asymptotically unbounded, the mechanism must exist before the store is large, and running it offline from the start avoids retrofitting a vacuum process onto a saturated graph.
+Tier 2 — status dynamics.
+11. Gated promotion with disuse decay and the rarity floor. Build decay in from the start; the rarity floor must exist before decay does or rare knowledge is lost during the interval.
+12. Policy lineage and transmutation (§5.7). Trivial at the start, expensive to reconstruct, and must precede any adaptive policy layer.
+13. Offline consolidation via a replica that periodically syncs to serving copies.
+14. Baseline comparison (T2.1) as soon as the pipeline is minimally functional — the fastest route to discovering which parts of this are already solved elsewhere. Pair with a within-store ablation per §11.1.
+15. Adjudication by charge with shadow-store regression (§7.3).
+16. Domain-scoped coexistence (§6.11).
+17. Terminal docket and record (§7.4), with T2.8 before any terminal disposition is executed.
+18. Sequence check (T3.3) before per-stage deletion decisions.
+19. Optional structures from §8, in whatever order the deployment's constraints suggest.
+A methodological caution about this sequence. It commits to one configuration of one policy and then measures it. That is efficient and it is also the failure it warns against elsewhere: designating an optimal pathway at the outset substitutes one untested design philosophy for another, and a single-arm build cannot distinguish "this works" from "this is the only thing tried." Where budget permits, at least two defensible configurations should be carried through Tier 2 in parallel — most cheaply as two policy parameterizations over one substrate, which costs a second policy layer rather than a second system.
+A test that partially closes the weight-space gap. A graph-based system has no distributed superposition and therefore no catastrophic forgetting to solve — it can validate governance logic but not that the policy addresses weight-space forgetting. Partial closure: let the gate decide which updates are applied to weights via low-rank adapters, then measure weight-space forgetting with and without gate governance. Buildable at late Tier 2.
+13. Open Problems Blocking Completion
+The architecture is buildable. The problems below are not solved, and none is solved by having been named precisely.
+13.1 Claim individuation
+Everything above assumes stable claim objects. T0.1 tests whether they exist and at what granularity. A coarse result changes the unit of governance from claim to cluster, which weakens what an exclusion edge means and makes adjudication harder to scope, and the proposal has no worked version at cluster granularity.
+A narrower question is deferred rather than answered here. T0.1 tests whether claims individuate by effect. Whether they also individuate by constitution, and whether the two pick out the same units, requires comparing claims to each other — which is the companion work on relational governance, not something this paper can measure. If the two do not coincide, this proposal has two units of governance where it assumes one, since Reliability and comparative advantage are effect quantities while exclusion edges and blast radius are structural.
+A coarse result need not be fatal: a coarser regime may have its own effective variables that are objectively meaningful rather than degraded versions of finer ones, in which case T0.1 determines which unit governance runs on rather than whether it runs. That reframing is available and is also the most abusable move in this document, because it converts a falsification into a redescription. It counts only if the cluster-granularity version of exclusion is written and says what exclusion means between clusters. Until then it is a rescue and is labelled one here in advance.
+13.2 Mutual execution
+Detecting that a candidate requires structural reorganization is implementable. Performing it is a search over revised structures and is unsolved. The framework's central diagnostic claim (§1.1) therefore identifies a failure mode it cannot repair, only refuse to compound.
+13.3 Adversarial consolidation is bounded, not prevented
+An adversary is a source that cannot be refused and cannot be verified, which is structurally the same problem as the reference layer and as source identity generally. The framework's defence was never authentication; it is that content clears the same bar regardless of origin. What remains open is magnitude, not mechanism. §8.7 bounds the remainder, weakly.
+13.4 Recursion termination
+Policy parameters adapt from history (§8.4). Edge status uses fixed thresholds specifically to stop the regress (§6.4), but that is a simplification rather than a result, and it is untested. Confidence propagation under cycles is unresolved. §2.4 notes the same problem observed in self-amending rule systems four decades ago without resolution.
+13.5 No convergence results
+Nothing here establishes that the Reliability estimate converges, that hysteresis stabilizes rather than merely slowing oscillation, that blast radius correlates with required restructuring, or that comparative adjudication converges rather than cycling among near-equivalent claims.
+The tractable next step is to state the assumptions a proof would need: under (a) evidence arriving as an ergodic process, (b) unbiased independence weighting, (c) hysteresis thresholds bounded away from zero, and (d) a finite claim space, does comparative adjudication converge? Making the assumption set explicit converts a vague gap into a specific open question, and would reveal quickly whether any assumption is one this architecture cannot satisfy.
+13.6 The universality criterion
+§5.1's binary/graded split is load-bearing — it generates the two-bucket model, the relocation of gradation to admissibility, and the entire terminal path — and the framework supplies no criterion for which claims are universal. This is not independent of §13.1: if claims individuate only at cluster granularity, "universal" may not be well-defined at the unit of governance.
+13.7 What counts as an authority violation
+§5.3 constrains the governance layer to removal-only authority and identifies abstraction as the sole violation. That identification is only as good as the declaration of what the layer produces, and two cases remain unsettled. Promotion asserts standing and is bounded by ε, which is a resolution rather than a dismissal. Inferred edges are asserted with no external provenance and are currently treated as categorically different from content because a relation is not a claim — which may be right and is assumed rather than argued.
+13.8 Stated versus operative ground
+Per §7.4. Where language models act as deciding components, the framework's records preserve justifications offered rather than justifications operating, and every proceedings mechanism here rests on records of reasons. Whether this admits any mechanism at all, or is a permanent limitation on using such models as adjudicating components, is open. It is arguably more load-bearing than §13.2.
+The general form of the problem is stronger than the observed instance. A rendered account of a process is not the process. In human cognition the point is demonstrable rather than merely arguable: the sensory rendering of thought — inner speech, mental imagery — is dispensable, since cognition proceeds without it in individuals who do not produce it, and what is dispensable was not the mechanism. The rendering is downstream output, and the intuition that it constitutes the thinking is an artifact of living inside the display.
+The design consequence is a preference rather than a mechanism: where behavioral and stated evidence are both available, prefer behavioral. This framework does not consistently apply it. Reliability is behavioral; charges rest on stated grounds. That asymmetry is not defended anywhere and should be, or removed.
+13.9 Procedural filtering
+The declarative scope is operationally leaky (§1.3), and no filter is specified for detecting procedural content arriving as structured notes.
+13.10 The objective does not span the architecture
+§3.4 establishes that the objective cannot price operations whose cost and benefit land in different denominations, and recommends dual-perspective reporting rather than a discount rate. That is a treatment, not a solution. A single objective that spans consolidation cost and serving benefit would require a stated exchange rate between governance compute and protected capacity, and no principled basis for one is offered here. Until then, the claim that compression derives from the objective is withdrawn rather than deferred.
+13.11 Groundedness does not propagate
+Confidence propagates along support edges (§6.10). Groundedness does not, and nothing in this proposal says whether it should.
+If A carries external evidence and B depends on A, B's relation to external constraint is undefined. Two claims with identical ledgers — both τ_ext = 0, both promoted on internal corroboration — are treated identically whether one sits adjacent to a heavily-grounded region and the other sits in a wholly internal one. That is almost certainly wrong, since dependence on a grounded claim is some relation to the world, and it may be the difference between a store organized around external constraint and one that has drifted free of it while satisfying every check.
+The obvious measure — path distance from a claim to the nearest node carrying τ_ext — is cheap and already computable. What is not established is whether groundedness attenuates along edges, at what rate, or whether it propagates at all rather than terminating at the node that received it.
+This question recurs at the architecture's next level, where the companion work asks whether external constraint survives one order of remove. Nobody had asked whether it survives one edge. The two are likely one question, and an answer at
