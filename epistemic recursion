@@ -1,0 +1,292 @@
+# Epistemic Recursion
+## Second-Order Governance and the Closing of the Loop
+
+**Outline v0.3** — Third of three. Assumes *Epistemic Governance for Agent Memory* v2.2 (L1) and *Epistemic Resolution* v0.3 (L2). Covers L3, L4, and L5.
+
+*Changes in v0.3: the correspondence test moves from raw correlation to residual (§8); the frozen relational probe set is no longer this paper's mechanism, having been derived as a calibration requirement in the resolution paper (§7.1); the attenuation question is identified with an edge-level question in the governance paper (§3.2); execution fidelity transposes (§5.4). Changes in v0.2: new §6 on boundary accounting, which gives this paper ownership of a problem the governance paper withdrew; corrected discriminating experiment in §9, which as previously stated did not satisfy its own methodological requirement; second-order environmental drift added to §7; two experiments added.*
+
+---
+
+## 0. The structural result the paper is built on
+
+The parallel arrangement of L3 and L4 produces a symmetry that was not designed in and that determines most of the paper:
+
+| | Governs against evidence | Governs against peers |
+|---|---|---|
+| **First order** (objects are claims) | **L1** — Epistemic Governance | **L2** — Epistemic Resolution |
+| **Second order** (objects are relations) | **L3** | **L4** |
+
+L3 stands to L1 as L4 stands to L2. Each second-order layer is its first-order counterpart applied one order up, with the governed object changed from a claim to a relation.
+
+**Consequence for the paper's job.** This is not a paper specifying two new architectures. It is a paper specifying **what ports and what breaks when the governed object changes from a claim to a relation** — one question, asked twice, answerable in far less space than either predecessor took. Most machinery is inherited. The content is the transfer conditions and the failures they expose.
+
+**The limb structure survives transposition.** L1 is the asymmetric limb because its input terminates outside the system; L3 inherits that limb, since the evidence it weighs is L1's evidence. L2 is the symmetric limb; L4 inherits it, and with it the ledger-blanking constraint (§4.2).
+
+---
+
+## 1. The Problem
+
+L1 produces claim dispositions grounded in external evidence. L2 produces relational descriptions at `(0,0)` that it cannot weigh, because weighing a relation requires evidence and evidence is the other limb's output.
+
+Neither limb closes on its own. L1 alone is a reflex arc — evidence in, disposition out, nothing binding successive dispositions into a structure. L2 alone is an ungrounded map: a well-organised account of how claims stand to one another with no reason to think any of them touch the world.
+
+The second-order tier is where they meet. Two things must happen there, they are different operations, and separating them forces the parallel arrangement:
+
+- **Validation** — do these relational descriptions hold? (L3)
+- **Generalisation** — do these relational descriptions exhibit higher-order structure? (L4)
+
+The first is governance. The second is resolution. Running them in series would make generalisation wait on validation, which is the wrong dependency: generation over candidates is what a generative layer does, and requiring pre-validated inputs would make L4 a filter rather than a generator.
+
+---
+
+## 2. Scope and Transfer Conditions
+
+### 2.1 Inherited without argument
+
+The two-sided ledger, gap and glut, the provenance partition, removal-only authority for the governance limb, the ledger-blanking constraint for the resolution limb, dispositions ordered by reversibility, the `(0,0)` entry rule for generated products, and declared-scope-scored-by-coverage.
+
+### 2.2 Must be re-derived rather than assumed
+
+Every mechanism whose justification referenced properties of *claims* specifically:
+
+- **Binary falsity.** L1's terminal path rests on universals falling to a single counterexample. Whether any relational description is universal in the relevant sense, and what a counterexample to a relation even is, is unsettled. If relations are never universal, the terminal path drops at second order and L3 has no irreversible disposition — a substantive simplification that should be checked before it is assumed.
+- **Disuse decay.** Decay runs on utilisation, and relations are not retrieved the way claims are. The signal must be reconstructed or dropped.
+- **Protected capacity.** The objective is denominated per unit of protected capacity, computed from claim fan-out. The second-order analogue is undefined — see §6, which is where this stopped being an open problem and became a section.
+- **Independence weighting.** Corroborating instances of a relation may be correlated in ways with no first-order analogue, since the instances are pairs and pairs share members.
+
+### 2.3 Out of scope
+
+Relations of order three and above. If the transposition is genuine there is no reason it stops at two, and stating that the tier structure could continue while declining to build it is more honest than pretending two is principled. §10.1.
+
+---
+
+## 3. L3 — Governance at Second Order
+
+### 3.1 What evidence about a relation is
+
+Evidence that A holds and evidence that B holds are not evidence that `R(A,B)` holds — they are evidence about the relata. Three candidate sources, in decreasing confidence:
+
+**Predictive success of the relation.** If `R` asserts A and B are functionally identical, substituting them should leave outcomes unchanged. Each substitution that holds is `e⁺`; each that fails is `e⁻`. Genuinely external — the world adjudicates — and the strongest source. It also makes L2's functional axis do double duty: the operation producing the relation supplies the evidence testing it, at different times.
+
+**Consistency with first-order dispositions.** If `R` asserts polar opposition and L1 terminally disposes of A while B survives on accumulating evidence, that is `e⁻` against `R`. Derived from external evidence rather than directly external.
+
+**Triangulation.** `R(A,B)` and `R(B,C)` license a prediction about `R(A,C)`. Testable, cheap, internal — accumulates `τ_int` and must be partitioned as such.
+
+### 3.2 The attenuation problem
+
+L3's external constraint is mediated: evidence about claims, used to weigh a construct the system built. Whether groundedness survives one order of remove, and whether it attenuates further at higher orders, is open.
+
+Provisional position: source one is genuinely external, since it is prediction tested against outcome; sources two and three are not; so `τ_ext` at second order is computed from substitution outcomes only. That is a narrow channel and may be too narrow to support the tier. **This is the paper's largest risk and belongs in the first section, not the last.**
+
+**The same question exists one level down and was not noticed there either.** The governance paper propagates confidence along support edges and does not propagate groundedness: if A carries external evidence and B depends on A, B's relation to external constraint is undefined (its §13.11). That is attenuation across one *edge*; this section asks about attenuation across one *order*. They are very likely one question, and an answer at either scale constrains the other — which makes the edge-level version worth solving first, since it is cheaper to measure and the machinery already exists.
+
+### 3.3 What L3 does with a validated relation
+
+A relation that promotes becomes actionable at first order — most obviously, a validated exclusion relation is an exclusion edge L1 can act on. This is where the governance paper's §13.7 closes: inferred edges currently have no provenance terminating outside the governance layer, and an edge arriving from L3 with its own ledger and its own external component does.
+
+**That is the strongest single argument for the tier's existence and should lead the paper.** L1 cannot ground its own edges. L3 can.
+
+### 3.4 Authority
+
+Removal-only, inherited. L3 may void a relational description, decline to promote it, relax its standing, or record it terminally. It may not assert relations — that is L2's operation and L4's.
+
+---
+
+## 4. L4 — Resolution at Second Order
+
+### 4.1 Analogy
+
+Relations between relations: A is to B as C is to D. Higher-order relational structure is what separates deep analogy from surface similarity, and it is the most generative operation the architecture contains.
+
+The measures transpose from L2: a functional axis (do these relations license the same substitutions and predictions?) and a structural axis (same form type, same neighbourhood shape over the relation graph). Whether the transposed measures are the same measures or merely analogous ones is the most interesting technical content in the paper.
+
+### 4.2 The ledger-blanking constraint transposes, and it kills a proposal
+
+L2 may not read the ledger. By symmetry L4 may not read relational ledgers — it compares relations on their own terms, without reference to how well-evidenced they are.
+
+This disqualifies a superficially attractive constraint on analogy: requiring `A:B::C:D` to map A's external evidence sources onto C's. Wrong twice over. It reads provenance, which L4 may not do. And it is substantively backwards — deep analogy is precisely relational correspondence *in the absence* of domain correspondence, so requiring evidence-source correspondence admits only within-domain analogies, which are the shallow ones.
+
+**What L4 reads:** relational descriptions, the claims they relate, and the topology of both. **Not:** any ledger, at either order.
+
+### 4.3 Operating on unvalidated input
+
+Because L3 and L4 run in parallel, L4 generalises over relations L3 has not yet validated and may be concurrently invalidating. This is a genuine cost and the paper should not minimise it: some L4 work is wasted, and analogical products may propagate from relations that turn out not to hold.
+
+The mitigation is structural and is the concrete reason L5 must combine before it divides (§5.2). An L4 product resting on relations L3 invalidated is discarded at recombination. Parallelism is affordable because the reconciliation point exists, not because the waste is small.
+
+### 4.4 Authority and bounding
+
+Positive, necessarily — a component that only subtracts cannot compare, and one that only compares cannot generalise. Bounding is the inherited machinery: enter at `(0,0)`, no citation until promoted, declared scope scored by coverage, sources retained until covered.
+
+**But the selection axis re-opens here, and this is the sharpest technical problem in the paper.** The resolution paper escapes abstraction's unbounded selection axis because a relational description is a coordinate computed from two measurements rather than an item chosen from an unbounded space. An analogy is not obviously a coordinate: `A:B::C:D` requires selecting C and D, and the space of candidate mappings is large.
+
+If analogy can be expressed as a coordinate — a position on a surface of correspondences rather than a chosen mapping — L4 inherits L2's bound and the architecture stays closed. If not, L4 has abstraction's unresolvable problem. **Settle before drafting; the answer determines whether L4 is boundable at all.**
+
+---
+
+## 5. L5 — Recombination and Redivision
+
+### 5.1 A change of basis, not an assembly
+
+The two tiers divide their work along different axes. **L1 and L2 divide by object**: claims versus relations. **L3 and L4 divide by operation**: validation versus generalisation. Second-order output is therefore sorted the wrong way to return to first order.
+
+L5 transposes it. Take the operation-divided tier-2 output, re-divide by object, remit — evidential content to L1, relational content to L2.
+
+This is what keeps L5 from being an assembly point. There is no node holding a recombined whole and no vantage from which the partition is visible; the operation is mechanical sorting along a declared axis. A layer that *understood* the combined output would generate the regress the architecture is built to avoid. A layer that transposes a basis does not.
+
+### 5.2 Combine before divide
+
+Three things happen at combination and none can happen after redivision:
+
+- **Discard.** L4 products resting on relations L3 invalidated are dropped (§4.3).
+- **Conflict detection.** L3 invalidating a relation that L4 found central to a strong recurrent pattern is informative, and is a signal about the *measures* rather than about the relation. Recombination is the only point where that disagreement is visible.
+- **Provenance and denomination tagging**, without which redivision cannot sort correctly (§5.3, §6).
+
+If L3 and L4 remitted independently, no point in the architecture would check the two second-order layers against each other, and the tier would be two unrelated channels rather than a tier.
+
+### 5.3 Everything returns as evidence, never as constraint
+
+| Tag | Origin | Re-entry |
+|---|---|---|
+| **E** | External-derived: validated relations with an external component | To L1, as evidence to weigh |
+| **I** | Internal-relational: validated relations, structural content | To L2, as a prior at `(0,0)` |
+| **A** | Analogical: L4 products | To both, at `(0,0)`, as candidates to investigate rather than working premises |
+
+### 5.4 Execution fidelity transposes, and matters more here
+
+The governance paper requires each stage to record whether it ran, on what input, within which declared parameters — because a design that was not executed and a design that does not work produce identical numbers.
+
+The requirement transposes and its stakes rise. At second order the layers run in parallel and their products are reconciled at recombination, so a silently skipped L4 pass appears as *L3 finding nothing to disagree with* rather than as an absence. The reconciliation step in §5.2 cannot distinguish agreement from one party not having spoken.
+
+> Each second-order layer emits an execution record per pass, and L5 refuses to recombine where either record is missing or shows truncated execution. A pass with incomplete fidelity records is discarded rather than remitted.
+
+This also protects the pass-based experiment in §9.1, whose entire signal is a difference between arms distinguished only by number of loop closures. A closure that did not fully execute is not a closure, and without fidelity records the arm reports N passes while having run fewer.
+
+### 5.5 Tagging constraints
+
+Three constraints. **A-tagged products carry the system-generated provenance marker**, so an analogy independently re-derived on a later pass does not read as independent corroboration. **No product returns as constraint** — L4's output reverts to baseline format and is subject to full admissibility on re-entry, which prevents the loop compounding its own authority across passes. And **`τ_ext` is not inherited on remittance**: an E-tagged product's external component is recomputed at first order rather than carried over, since carrying it is how mediated groundedness would silently become direct.
+
+---
+
+## 6. Boundary Accounting
+
+*New in v0.2, and the section that gives this paper a second concrete deliverable.*
+
+### 6.1 The problem this inherits
+
+The governance paper withdrew a claim rather than deferring it. Its objective cannot price abstraction, and the reason is not myopia about time: abstraction's cost is denominated in governance compute and lands in the consolidation budget, while its benefit is denominated in protected capacity and lands in the serving budget. Two quantities, not one quantity at two times — which is why a discount rate does not fit, and why that paper's §13.10 states that a single objective spanning both would require an exchange rate nobody has.
+
+That paper also establishes, separately, that abstraction is a **resolution operation that leaked into the governance layer** — the one first-order operation with positive authority, resistant to the bounding technique the rest of that paper relies on.
+
+Put those together. The cost lands in L1's budget; the product belongs to L2's layer. **The transfer abstraction cannot be priced across is a tier boundary**, and this is the paper that owns tier boundaries.
+
+### 6.2 The general requirement
+
+v0.1 specified *what* crosses each boundary (§5.3's tagging) and said nothing about *in what denomination* or *who bears the cost*. That is a gap, and it is the same gap the governance paper hit one level down.
+
+> **Every tier boundary carries an accounting declaration: what crosses, in what denomination it is measured, and which layer's budget bears the cost of producing it.** Where the producing layer and the benefiting layer differ, the transfer is reported as a quantity rather than absorbed into either layer's objective.
+
+Three boundaries, three declarations:
+
+| Boundary | Crosses | Denomination | Cost borne by |
+|---|---|---|---|
+| L1 → tier 2 | Claim dispositions, ledgers | Evidence weight (LLR) | L1 consolidation budget |
+| L2 → tier 2 | Relational descriptions at (0,0) | Coordinates on the relation surface | L2 comparison budget |
+| tier 2 → L5 → L1/L2 | E/I/A-tagged products | Evidence weight (E), coordinates (I), candidates (A) | Second-order budget |
+
+The third row is where the cross-tier transfers concentrate, which is why L5 is where they are accounted. It is also why L5 must remain mechanical: **accounting a transfer is not the same as pricing it**, and a layer that priced transfers would be exercising exactly the authority §5.1 denies it.
+
+### 6.3 What this buys, and what it does not
+
+It does not supply the missing exchange rate. It makes the absence *visible and located* rather than concealed inside an aggregate — which is the treatment the governance paper recommends at first order, applied consistently at the tier boundaries where the transfers actually occur.
+
+It does resolve one thing. An operation whose cost and benefit land in different layers is no longer anomalous or unpriceable; it is a declared cross-boundary transfer, and abstraction becomes the first worked instance rather than a permanent exception. Whether the architecture eventually *needs* an exchange rate depends on whether any decision requires comparing the two denominations directly. §10.8.
+
+---
+
+## 7. Closure Conditions
+
+Conditions attach to the **tier transition**, not to each of the four channels, since both second-order layers receive from both first-order layers.
+
+- **L1 closes** where its output measurably narrows the space of states the second-order tier can occupy. Delivering dispositions is insufficient; they must narrow.
+- **L2 closes** where its relational descriptions are distinguishable, at the second-order tier, from what that tier generates on its own.
+- **The loop closes** where L5's remitted product is distinguishable, at L1 and L2, from what they were already producing.
+
+All three are pass/fail and measurable. A pass in which any fails is a pass in which the loop transmitted without anything crossing.
+
+### 7.1 Two things that corrupt the third condition
+
+**Baseline capture.** Over enough passes, L1 and L2's baselines have themselves been shaped by remitted traffic, so novelty is scored against a baseline the loop built. Whether a lagged or perturbation-derived baseline is the correct repair is open.
+
+**Environmental drift, second-order form.** *(New in v0.2.)* The governance paper adds a failure mode in which measured performance moves because the query distribution shifted rather than because the store improved, and mitigates it with a frozen query sample evaluated alongside the live stream.
+
+At second order this is worse in a specific way: **the loop shifts its own query distribution.** Each pass changes what the store contains, which changes what gets retrieved, which changes the distribution against which the next pass's improvement is measured. The first-order version has an exogenous shift; the second-order version has an endogenous one, and endogenous shift is indistinguishable from improvement without a fixed re7.1 Two things that corrupt the third condition
+Baseline capture. Over enough passes, L1 and L2's baselines have themselves been shaped by remitted traffic, so novelty is scored against a baseline the loop built. Whether a lagged or perturbation-derived baseline is the correct repair is open.
+Environmental drift, second-order form. (New in v0.2.) The governance paper adds a failure mode in which measured performance moves because the query distribution shifted rather than because the store improved, and mitigates it with a frozen query sample evaluated alongside the live stream.
+At second order this is worse in a specific way: the loop shifts its own query distribution. Each pass changes what the store contains, which changes what gets retrieved, which changes the distribution against which the next pass's improvement is measured. The first-order version has an exogenous shift; the second-order version has an endogenous one, and endogenous shift is indistinguishable from improvement without a fixed reference.
+The mitigation transposes, and in v0.3 it is no longer this paper's to specify. The resolution paper derives an anchor set — a fixed collection of claim pairs with independently established relations, re-measured every pass — from a stronger requirement than experimental control: its two measures are purely relative, so the relation surface has no origin, and without anchoring the layer is confined to comparing pairs that already co-retrieve.
+This paper inherits it and adds one obligation. Every pass is evaluated against the anchor set as well as against the live stream, and divergence between them is the loop's own environmental contribution. Anchor coordinates drifting while the anchors themselves have not changed is an instrument fault at first order, not a second-order finding, and the tier must not attribute it to its own operation.
+That the same mechanism is required for calibration at first order and for control at second order is worth noting rather than passing over: an instrument that cannot place distant pairs and an experiment that cannot separate improvement from drift need the same fixed reference, for the same underlying reason.
+8. The Correspondence Question
+The material removed from the governance paper's T0.1, where it does not belong and cannot be measured, since it requires both limbs' output simultaneously.
+Claims individuate on a functional axis and a structural axis. Whether those axes pick out the same units is the question the second-order tier is the first position able to ask.
+Within-functional
+Within-structural
+Cross-axis
+Reading
+high
+high
+high
+One axis. L2's channel does not close — it carries nothing L1 had not already said
+high
+high
+low
+Two axes. The architecture's requirement is met
+high
+low
+—
+Functional individuation only. Structural mechanisms withdraw
+low
+—
+—
+Nothing individuates. The program stops
+The test belongs on the residual, not on the raw correlation. A binary high/low reading assumes the axes are either the same measurement or independent ones. There is a third case and it is probably the likeliest: two instruments accessing one underlying property while each remains sensitive to something the other is not. Raw correlation is then moderate, which the table above cannot interpret.
+Regress the structural profile on the functional profile and test the residual for informativeness. L2's channel closes if the residual carries information about relations that the functional profile alone does not — not if the two profiles are uncorrelated.
+Under that reading the resolution paper's two requirements stop conflicting. Locally, a genuine relation should register on both instruments, since a defect present in a claim pair should be visible from either access mode. Globally, the profiles must not reduce to one another. Co-detection plus an informative residual is exactly the signature of two access modes to one property, and it is what the architecture should be predicting rather than the stronger claim that the axes are independent.
+The prediction still runs against the architecture, which is the right direction. A residual carrying no information is evidence that the second limb is not a limb.
+Two consequences to state in advance so they read as predictions rather than accommodation. Fan-out is a structural quantity and appears among Reliability's indicators in the governance paper (§6.6) at low weight; under a two-axis result it should be dropped from that model rather than down-weighted, which is checkable against T1.2's residuals. And the granularity at which functional identity stabilises need not be the granularity at which structural identity does, in which case the architecture has two units of governance and needs a stated correspondence between them.
+9. Emergence and the Discriminating Experiment
+Emergence, if it occurs, occurs across passes rather than within one. The minimum measurable unit is two full navigations and the interesting quantity is second-order: whether improvement per pass is holding, growing, or decaying.
+What the loop is for. Convergence of claim individuation by iteration — governance supplies a rough initial segmentation, resolution refines it, the second-order tier validates and generalises, L5 remits as evidence, repeat. Coherence improvement is the observable; individuation convergence is the mechanism. Measuring coherence without measuring individuation stability measures a symptom.
+9.1 The discriminating experiment, corrected
+The v0.1 design does not satisfy the methodological requirement the governance paper states, and the correction matters because this is the experiment the whole architecture rests on.
+v0.1 compared N passes over evidence set E against one pass over N×E. Those two conditions differ in total evidence, final store size, query distribution, and total compute simultaneously. It is a comparison across environments, which measures environments. Any difference is attributable to at least four uncontrolled variables.
+Corrected design. Hold total evidence fixed at E and total compute fixed at C across both arms. Vary only the number of loop closures.
+Arm R: N passes over E, compute budget C.
+Arm S: one pass over E, compute budget C, with the additional compute spent on within-pass iteration — more comparisons, deeper propagation, more thorough adjudication.
+Both arms end with the same evidence and have consumed the same compute. The only difference is whether the tier boundaries were crossed N times or once.
+That isolates the quantity of interest, which was never "more processing helps" but "closure helps." If Arm R outperforms Arm S at matched evidence and matched compute, something is produced by traversing the loop that is not produced by doing more work inside it. That is the recursion signature and nothing else in the architecture predicts it.
+Both arms are evaluated against the frozen relational probe set (§7.1), not against their own live streams.
+9.2 The failure it must be distinguished from
+A loop transmitting vigorously where both poles already generate what crosses. The signature is not improvement without new evidence — genuine reorganisation of a fixed corpus should produce some — but improvement without new evidence that never saturates. A fixed-point iteration approaches a limit; self-agreement does not. Saturation is therefore the predicted behaviour and its absence is the alarm, which inverts the naive reading.
+9.3 Proof-of-concept target
+One marginal but measurable improvement in coherence after a full navigation, with all three closure conditions met.
+Candidate measure: the register of unreconciled contradictions, paired against detection rate — a system that resolves contradictions by failing to detect them scores perfectly on the unpaired version. Resolutions must also be attributed by limb, since a register that drains entirely through first-order demotion demonstrates that the governance paper works, which was not in question. Only resolutions attributable to L3 — a relational description showing two claims were never in conflict — are evidence the closure does anything.
+9.4 Two further experiments
+Parallelism is a third condition, not a neutral one. L3 and L4 run in parallel by design, and the paper assumes this is equivalent to either serial order minus the waiting. That is untested. Run three arms — L3 then L4, L4 then L3, and parallel — on matched stores. If the parallel arm differs from both serial arms, the arrangement has effects of its own and §4.3's waste analysis is incomplete.
+Replication. Re-run the validated configuration on a store of different provenance and domain with no re-tuning, and compare the improvement-per-pass profile rather than the endpoint. A profile that replicates indicates an architecture; one requiring re-tuning indicates a configuration fitted to one store. This is the second-order form of the governance paper's T3.4 and it is the single strongest external check available.
+10. Open Problems
+Where the tier structure stops. If transposition is genuine, third-order relations are available. Nothing here argues two is principled rather than convenient.
+Whether analogy is a coordinate (§4.4). Determines whether L4 is boundable.
+Attenuation (§3.2). Whether mediated external constraint is external constraint, and whether the narrow channel supports the tier.
+What a counterexample to a relation is (§2.2). Determines whether the terminal path exists at second order.
+The baseline problem (§7.1). Compounding across passes, and worse here than in either predecessor.
+Cost. Second-order operations are pairwise over relations, which are themselves pairwise over claims. Naively quartic. The resolution paper has no triage function and this paper needs one more urgently.
+Whether coherence and individuation-convergence can be measured independently. §9 asserts one is observable and the other is mechanism. If the only available measure of individuation convergence is coherence, the distinction is not operational and §9.3's target is circular.
+Whether the architecture ever needs the exchange rate (§6.3). Boundary accounting locates the missing conversion without supplying it. If some decision requires comparing governance compute to protected capacity directly, the gap becomes blocking rather than merely visible.
+11. Notes on Drafting
+Lead with §3.3. L1 cannot ground its own edges and L3 can. That is the argument for the tier existing, it closes a stated hole in the governance paper, and it is concrete in a way the emergence claims are not. Introduce the recursion as what makes it possible rather than as the headline.
+§6 is the second deliverable and should be positioned as one. Boundary accounting resolves a problem the governance paper explicitly withdrew, and it does so structurally rather than by supplying a number. Two concrete resolutions to stated first-order gaps is a stronger case for the paper than any claim about emergence.
+Keep §3.2 in the first section. The attenuation risk is the paper's largest and burying it in open problems would be the move the predecessors have been careful not to make.
+§9.1's correction should be visible, not silent. The original design failed a requirement the companion paper states, and saying so is worth more than quietly shipping the better version — it demonstrates the requirement has teeth.
+The paper is short. Most machinery is inherited; the content is transfer conditions, boundary accounting, and the two places transposition fails. If it comes out as long as either predecessor, something has been re-derived that should have been cited.
