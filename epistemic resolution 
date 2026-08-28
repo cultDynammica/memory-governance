@@ -1,0 +1,293 @@
+# Epistemic Resolution
+## Relational Governance for Agent Memory
+
+**Draft v0.3** — Second of three. The companion paper *Epistemic Governance for Agent Memory* (v2.1) specifies governance of claims against evidence; this paper specifies governance of claims against each other. A third paper treats their conjunction.
+
+*Changes in v0.3: the surface is shown to have no origin, and anchoring is added as a mechanism rather than borrowed from the third paper as a control (§5.6); §9.4's rare-pair bias is upgraded from incidental undersampling to structural confinement. Changes in v0.2: relations are directed compositions rather than symmetric pairs (§3.3), which resolves an open problem and changes what the surface's coordinates are; the polar region is identified with epistemic equivalence and given a concrete first-order consequence (§5.4); §5.1's admission rule corrected — it conflated unproduced with nonexistent; measurement instability added as a third ledger state (§6.3); cross-axis defect agreement added as an instrument check (§6.4); and §9.6 addresses whether the second-order layer needs these axes or different ones.*
+
+---
+
+## 1. The Problem
+
+The governance paper answers what a claim's status is with respect to evidence. It cannot answer what a claim's status is with respect to *another claim*, and it needs that answer in at least four places:
+
+- **Exclusion edges** assert that two claims cannot both hold within a domain. The governance layer creates these, they have no provenance terminating outside it, and the paper waives the resulting authority problem on the assumption that a relation is not a claim — assumed rather than argued (§13.7, companion).
+- **Comparative adjudication** compares a challenger to an incumbent on their shared applicability domain. What makes a domain shared is a relational fact nothing computes.
+- **Domain-scoped coexistence** retains two contradictory claims when their applicability domains are disjoint. Disjointness is relational.
+- **Non liquet** closes a proceeding without a finding where the evidence cannot discriminate between two claims in an epistemic equivalence class. Membership in such a class is a relational fact the governance paper asserts and does not measure. §5.4 measures it.
+- **Individuation** — whether two entries are one claim or two — is the largest unsecured assumption in the entire program, and it is a comparison.
+
+Each of these is currently handled by assertion, by heuristic, or by deferral. They are the same operation appearing five times: **place two claims side by side and say how they stand to one another.**
+
+### 1.1 What "resolution" means here
+
+The companion paper uses τ for *resolution* in the optical sense — resolving power, how much has been spent distinguishing one state from another. A claim's τ measures how well it has been resolved against evidence.
+
+This paper extends the same operation to a different second argument. Where governance resolves a claim against the world, resolution resolves a claim against another claim. The quantity is the same kind of quantity; only what stands opposite has changed.
+
+### 1.2 The central structural claim
+
+> **Individuation and opposition are the same measurement read at different points on the same surface.**
+
+Two claims that do the same work and are built the same way are not two claims. Two claims that do the same work and are built in maximally different ways stand in one relation of opposition; two claims that do different work with ambiguous structural contrast stand in another. These are not separate questions requiring separate machinery. They are regions of one measurement space, and the varieties of sameness and opposition are what that space looks like when plotted.
+
+This is the paper's substantive bet, and §5 states what would falsify it.
+
+---
+
+## 2. Scope, and One Hard Constraint
+
+### 2.1 Scope
+
+This paper addresses **directed binary relations between declarative claims within a single store**, where both claims are individuable at the granularity the companion paper's T0.1 establishes. Relations among three or more claims, relations across stores, and relations involving procedural content are out of scope for the same reasons the companion paper excludes them.
+
+### 2.2 The constraint that shapes everything below
+
+> **Resolution measures must be computable with the evidence ledger blanked.**
+
+The reason is architectural rather than stylistic. Governance is the limb whose input terminates outside the system — its evidence arrives in a format the system cannot run backwards, and that is what makes it constraining. Resolution is the limb that compares peers in one currency, both directions, with no external terminus of its own.
+
+If resolution's measures read the ledger, three things follow immediately and all are fatal:
+
+1. The two limbs stop being two. A relational measure computed from evidence is governance producing derived statistics, and the architecture has one limb wearing two coats.
+2. Relational output re-entering the ledger is internal resolution entering as though it were external — τ_int masquerading as τ_ext, which is the model-collapse signature and the specific failure the provenance partition exists to detect.
+3. The loop compounds. Relational labels move evidence, moved evidence changes what gets compared next, and no external input ever gets a vote.
+
+The constraint disqualifies the most natural-seeming measures. Anything of the form *these claims are related because their evidence overlaps* is disqualified. So is anything weighted by provenance, anything reading τ_ext, and anything defined as distance to an externally-grounded node. Those are all governance quantities.
+
+**What resolution may read:** the claims themselves, their form, and the shape of the edge structure connecting them — support, exclusion, and dependency topology as *topology*, with provenance stripped. And behavior: what the system does with a claim, measured by perturbation rather than by evidence.
+
+---
+
+## 3. The Functional Axis
+
+**The question:** do these two claims do the same work?
+
+### 3.1 Substitutability under perturbation
+
+> **Two claims are functionally identical to the degree that substituting one for the other leaves system behavior unchanged across a probe set.**
+
+Operationally: replace A with B in the retrieval path, hold everything else fixed, and measure divergence in downstream outputs over a probe distribution. Functional distance `d_f` is that divergence, normalized.
+
+This is deliberately not embedding similarity. Embedding proximity measures how alike two claims *look* in a representation shaped by training-corpus co-occurrence, which is a fact about the corpus rather than about the claims. Substitutability measures what they *do*. Two claims can be lexically near-identical and functionally distinct, and lexically remote and functionally interchangeable, and the second case is the one worth finding.
+
+The measure survives §2.2: it reads behavior, not evidence. It is also defined for claims with empty ledgers, which matters more than it appears — individuation is most needed at ingestion, when a new claim has no evidence at all, and any functional measure derived from evidence is undefined exactly where it is most needed.
+
+### 3.2 Retrieval co-activation as the cheap estimator
+
+Substitution testing is too expensive to run on every pair. The companion paper faces the identical problem with Reliability and resolves it by treating the expensive quantity as latent with cheap noisy indicators; the same move applies.
+
+Retrieval co-activation — do these two claims surface together, and does retrieving one suppress retrieval of the other — is nearly free and weakly informative about substitutability. Embedding similarity is likewise admissible **as an estimator of `d_f` rather than as an axis of its own**, with its corpus-contamination bias characterized rather than ignored. Neither is the measure. Both are indicators of it.
+
+### 3.3 Relations are directed, and this is not a flag on a symmetric measure
+
+v0.1 treated `d_f` as symmetric and proposed recovering direction afterward as a separate predicate. That was the wrong construction and it left directionality as an open problem it did not need to be.
+
+Substitution is not symmetric. Replacing A with B and replacing B with A are two different operations with two different divergences, and there is no reason to average them. `A → B` and `B → A` are **two coordinates, not one coordinate with an arrow attached.**
+
+> **A relation is a directed composition.** Write `B|A` for *B apprehended in place of A* — the divergence produced when A's position in the retrieval path is occupied by B. `B|A` and `A|B` are independent measurements, and their asymmetry is itself informative rather than an artifact to be normalized away.
+
+Three things this buys.
+
+**Generalization becomes readable off the surface rather than requiring separate machinery.** If `B|A` is low and `A|B` is high, B covers A's work but A does not cover B's — B is the broader claim. That is a directed relation obtained from two measurements the system already makes, not a predicate bolted on afterward.
+
+**The support edges of the companion paper are directed, and a symmetric relational layer could never have grounded them** (§10). This was a latent inconsistency in v0.1: the layer proposed to supply exclusion edges produced only symmetric output, while half of what it was supposed to supply was directional.
+
+**Ordering carries information that a conjunction destroys.** Two relations built from the same pair of claims in opposite directions are genuinely different relations. Any notation representing them as one loses the distinction, and any measure that averages them discards exactly the asymmetry that identifies generalization, specialization, and dependence.
+
+The surface is therefore over ordered pairs, and `|R| = 2 × (number of claim pairs)` rather than one relation per pair. §9.5's cost problem is correspondingly worse.
+
+---
+
+## 4. The Structural Axis
+
+**The question:** are these two claims built the same way?
+
+Substantially less settled than the functional axis; candidates rather than a specification.
+
+### 4.1 Why the obvious version fails
+
+The tempting measure is dependency-neighborhood shape: two claims are structurally alike if their support and exclusion edge sets are alike. This fails immediately. Two claims with identical fan-out are not thereby structurally identical, and the store is full of claims with identical fan-out for uninteresting reasons.
+
+Fan-out is a scalar summary of a structure, and scalar summaries of structures lose exactly what makes structures different from each other. The measure has to be sensitive to shape, not to size.
+
+### 4.2 Internal form
+
+Claims differ in how they assemble evidence, independently of their content and independently of their position in the graph. *All ravens are black* and *ravens are usually black* have similar content, similar neighborhoods, and different internal architecture: one is universally quantified and falls to a single admissible counterexample, the other is a statistical aggregate and does not.
+
+A provisional type system: universal, existential, statistical, comparative, conditional, temporal. Not surface grammar — the evidential architecture of how the claim assembles support.
+
+**Internal form should weight the comparison rather than gate it.** An earlier proposal excluded cross-form comparisons by design, which sounds like discipline and is a serious loss: discovering that a universal and its statistical counterpart are related is arguably the most valuable output resolution can produce, because it is the resolution path for a glut. The universal falls to a counterexample, the statistical version survives, and the relation records why. A design that forbids the comparison forbids finding this.
+
+**Internal form is also a candidate answer to the companion paper's §13.6.** That paper's binary/graded falsity split is load-bearing and rests on a criterion for which claims are universal that it does not supply. A form typology supplies one. Whether it survives contact with real claims is untested, and the companion paper should not adopt it until it does.
+
+### 4.3 Neighborhood shape
+
+Two candidates that survive §2.2, having been stripped of their provenance-reading components:
+
+**Exclusion density** — the ratio of realized mutual exclusions to possible pairs in a claim's local neighborhood. A claim embedded in a densely contested region is structurally different from one in an uncontested region, independently of what either claim says.
+
+**Symmetry order** — the size of the automorphism group of the subgraph induced by a claim and its immediate dependents and exclusions. A genuine shape measure rather than a size measure: it distinguishes a claim supporting five interchangeable dependents from one supporting five differentiated dependents, which fan-out cannot.
+
+Both are computable from topology alone. Neither is sufficient on its own, and two components do not constitute a measure; §9.1 records this as the paper's largest gap.
+
+### 4.4 What was excluded and why
+
+*Causal depth to an externally-grounded node* is a provenance measure. It is a genuinely useful quantity — per-claim groundedness, which the companion paper states only at the level of the reference layer as a whole — but it belongs to governance, not to resolution.
+
+*Dependency heterogeneity over provenance classes* is disqualified for the same reason, more directly.
+
+Both read the ledger, and both would collapse the structural axis onto the functional one by way of evidence.
+
+---
+
+## 5. The Relation Surface
+
+### 5.1 The typology is discovered, not declared
+
+Given `d_f` and `d_s`, every ordered claim pair occupies a point in a two-dimensional space. Relation classes are **regions of that space**, and a class is *admitted* only where the measurement produces a populated, stable region.
+
+| Region | Reading |
+|---|---|
+| `d_f` low both directions, `d_s` low | Not two claims. One claim, redundantly stored |
+| `d_f` low both directions, `d_s` high | Same work, maximally different construction — *polar*. See §5.4 |
+| `d_f` low one direction only | Directed coverage — one claim generalizes the other |
+| `d_f` high, `d_s` mid | Different work, ambiguous structural contrast — *inverse* |
+| `d_f` high, `d_s` high | Unrelated on both axes |
+
+**The named classes are hypotheses about where populated regions will be found, not definitions.** If the measurement produces no stable population at `d_f` low / `d_s` high, polar opposition is not a real relation in this store and the name is withdrawn. If it produces a stable population somewhere unnamed, that region gets a name after it is characterized, never before.
+
+The discipline is stated because the failure it guards against is specific and seductive: a two-axis space with three states per axis has nine cells, and naming all nine because the grid looks incomplete produces a taxonomy that predicts nothing.
+
+### 5.2 Unproduced is not the same as nonexistent
+
+v0.1 said a class exists only where the measurement produces a stable region. That is too strong, and the overreach is the same one the framework criticizes elsewhere: it treats the absence of a measurement as evidence about the world.
+
+> **A class is *admitted* where the measurement produces it. A class may be *hypothesized as unreachable* where there is structural reason to expect a region and no available instrument reaches it.** The two are recorded differently and neither is silently converted into the other.
+
+The distinction matters because instrument coverage is uneven by construction. `d_f` is measured by perturbation over a probe distribution, so regions of the claim space that probes rarely touch are measured badly — the same rare-knowledge bias the companion paper mitigates with an external annotation channel, arriving here as blind spots on the surface rather than as decaying claims.
+
+An unreachable-but-hypothesized region is not usable and is not discarded. It is a stated expectation with a stated reason why no measurement supports it, which is the honest form and also the form that tells a later reader what instrument to build.
+
+### 5.3 The surface stays two-dimensional
+
+A proposed simplification collapses the two axes into a single index — some ratio of functional to structural distance — so pairs can be ranked on one number.
+
+This must not be done, for the reason the companion paper does not use scalar confidence. A pair at (0.1, 0.1) and a pair at (0.8, 0.8) have the same ratio and are in entirely different situations: the first is two nearly identical claims, the second differs substantially on both axes. Collapsing the surface reintroduces exactly the failure the two-sided ledger was built to prevent, one level up.
+
+### 5.4 The polar region is the epistemic-equivalence region
+
+Two hypotheses are **epistemically equivalent** under a knowledge state when no information available to that state distinguishes them — formally, when the evidence is equally likely under both. Radically different underlying situations; identical predictive consequences given what is known.
+
+That is `d_f` low with `d_s` high. Same work, different construction. **The polar region and the epistemic-equivalence class are the same region of the surface**, and this identification is the paper's most concrete result, because it converts a coordinate into a first-order instruction.
+
+The companion paper disposes of such pairs by **non liquet**: the proceeding closes without a finding and neither claim's standing changes. That disposition currently fires on a relational fact nobody measures. Measuring it here supplies the trigger:
+
+> **A pair in the polar region is routed to non liquet rather than adjudicated.** Adjudication between epistemically equivalent claims cannot produce a finding, so running it consumes governance compute to reach a foregone conclusion.
+
+And one hard rule follows, which is worth stating because the tempting alternative is available and wrong:
+
+> **A tie within an epistemic-equivalence class must not be broken by any internal measure.** Retrieval frequency, downstream reliance, corroboration count within the store, and every other quantity the system computes about itself are `τ_int`. Breaking the tie by consensus produces an answer that is well-formed, stable, and unrelated to which claim is true. The tie stays unbroken until `τ_ext` separates them.
+
+This is the same prohibition the companion paper enforces at claim level with commitment drift, arriving here as a rule about a region rather than about a claim. It also gives the polar region a *use* rather than only a name, which §5.1's discipline requires of any admitted class.
+
+### 5.5 Relations are scoped
+
+Exclusion in the companion paper is domain-scoped: two claims cannot both hold *within domain D*. Relations inherit this. Two claims may be polar opposites in one domain and unrelated in another, and a relation asserted globally is a scope error.
+
+Scope is derived from observed invocation rather than declared, for the reason the companion paper gives: declared scope is exploitable, since a claim can evade adjudication by acquiring a narrow self-serving domain. The cost is the same bias — the store resolves relations well among frequently co-retrieved claims and badly among rare ones.
+
+### 5.6 The surface has no origin, and must be anchored
+
+Both measures are **relative**. `d_f` is the divergence produced when one claim occupies another's position; `d_s` is the difference between two neighbourhood shapes. Each positions a pair against itself. Nothing measured so far establishes an absolute coordinate, which has two consequences that were not visible while the axes were treated as fixed scales.
+
+**The typology is distribution-dependent.** What counts as high `d_s` is defined by the spread of pairs actually measured in this store. Two s.3 The surface stays two-dimensional
+A proposed simplification collapses the two axes into a single index — some ratio of functional to structural distance — so pairs can be ranked on one number.
+This must not be done, for the reason the companion paper does not use scalar confidence. A pair at (0.1, 0.1) and a pair at (0.8, 0.8) have the same ratio and are in entirely different situations: the first is two nearly identical claims, the second differs substantially on both axes. Collapsing the surface reintroduces exactly the failure the two-sided ledger was built to prevent, one level up.
+5.4 The polar region is the epistemic-equivalence region
+Two hypotheses are epistemically equivalent under a knowledge state when no information available to that state distinguishes them — formally, when the evidence is equally likely under both. Radically different underlying situations; identical predictive consequences given what is known.
+That is d_f low with d_s high. Same work, different construction. The polar region and the epistemic-equivalence class are the same region of the surface, and this identification is the paper's most concrete result, because it converts a coordinate into a first-order instruction.
+The companion paper disposes of such pairs by non liquet: the proceeding closes without a finding and neither claim's standing changes. That disposition currently fires on a relational fact nobody measures. Measuring it here supplies the trigger:
+A pair in the polar region is routed to non liquet rather than adjudicated. Adjudication between epistemically equivalent claims cannot produce a finding, so running it consumes governance compute to reach a foregone conclusion.
+And one hard rule follows, which is worth stating because the tempting alternative is available and wrong:
+A tie within an epistemic-equivalence class must not be broken by any internal measure. Retrieval frequency, downstream reliance, corroboration count within the store, and every other quantity the system computes about itself are τ_int. Breaking the tie by consensus produces an answer that is well-formed, stable, and unrelated to which claim is true. The tie stays unbroken until τ_ext separates them.
+This is the same prohibition the companion paper enforces at claim level with commitment drift, arriving here as a rule about a region rather than about a claim. It also gives the polar region a use rather than only a name, which §5.1's discipline requires of any admitted class.
+5.5 Relations are scoped
+Exclusion in the companion paper is domain-scoped: two claims cannot both hold within domain D. Relations inherit this. Two claims may be polar opposites in one domain and unrelated in another, and a relation asserted globally is a scope error.
+Scope is derived from observed invocation rather than declared, for the reason the companion paper gives: declared scope is exploitable, since a claim can evade adjudication by acquiring a narrow self-serving domain. The cost is the same bias — the store resolves relations well among frequently co-retrieved claims and badly among rare ones.
+5.6 The surface has no origin, and must be anchored
+Both measures are relative. d_f is the divergence produced when one claim occupies another's position; d_s is the difference between two neighbourhood shapes. Each positions a pair against itself. Nothing measured so far establishes an absolute coordinate, which has two consequences that were not visible while the axes were treated as fixed scales.
+The typology is distribution-dependent. What counts as high d_s is defined by the spread of pairs actually measured in this store. Two stores can therefore produce incomparable surfaces, the same pair can land in different regions in each, and a named class is a fact about a store rather than about relations. Cross-store comparison — including the replication check the third paper treats as its strongest external test — is not currently meaningful.
+Worse: without an absolute reference the layer cannot reach beyond local proximity. Relative positioning works where a reference is at hand. It fails for wide separations, because there is nothing to position against — the same reason a system navigating by local relative coordinates handles adjacent steps effortlessly and cannot execute a long jump without looking. Applied here: resolution can compare pairs that already co-retrieve, because co-retrieval supplies the local reference, and it has no way to place a pair drawn from two distant regions. §9.4 recorded this as sampling bias against rare claims. It is not sampling bias. It is structural confinement to the neighbourhood, and no amount of additional measurement escapes it.
+The repair is the one available to any system lacking an internal map: establish position by periodic reference to something fixed outside the measurement.
+An anchor set is a fixed collection of claim pairs with independently established relations, re-measured every pass. Anchor pairs are chosen to span the surface — near-identical, polar, directed, unrelated — and to span the store's regions, including regions the live measurement rarely reaches. Measured coordinates are reported relative to the anchor set rather than to the live population.
+Three things this supplies. Coordinates become comparable across stores and across passes, which is what makes replication meaningful and what makes drift in the measures themselves detectable — anchor coordinates moving while the anchors have not changed is an instrument fault, not a finding. Pairs from distant regions become placeable, since each can be positioned against anchors rather than against each other. And §6.3's instability check gains a reference: instability on anchor pairs is an instrument problem, instability on live pairs while anchors hold steady is a fact about the store.
+The anchor set is authored, and therefore subject to the companion paper's warning that a constraint you designed is still a constraint you designed. It is not a source of truth about relations. It is a ruler, and the requirement on a ruler is that it not change while being used.
+6. Relational Descriptions Are Claims
+6.1 They carry ledgers
+A relational description is an assertion that can be right or wrong, and it therefore requires the same treatment any assertion gets.
+The argument is easiest to see in a case a naive design gets wrong. A taxonomy of relations needs a category for no significant relation on this axis. But that silently merges two states: we compared these thoroughly and found them unrelated, and we have never compared these. Those are gap and glut at the relational level, and the companion paper's founding move was refusing to conflate them.
+So relational descriptions carry two-sided ledgers (e⁺, e⁻) exactly as claims do, with w and τ meaning what they mean there. A relation at low τ is unexamined. A relation at high τ with w ≈ 0 has been examined and is contested — a real and informative state, and the state in which two claims are genuinely ambiguous with respect to each other rather than merely unstudied.
+This is where the two papers are established to share a spine. The evidence ledger ports to relational governance because gap and glut are facts about evidence, not about which limb is doing the work.
+6.2 Resolution does not fill them
+Resolution emits relational descriptions at (0,0). It does not weigh them.
+Accumulating evidence on a relational description requires evidence about the underlying claims, which is governance's output, and combining the two is the conjunction the third paper treats. The direction of flow is fixed and asymmetric:
+Evidence flows from claims to relations. It never flows from relations to claims.
+A relation cannot corroborate a claim. If it could, resolution would be an evidence source with no external terminus, which §2.2 forbids.
+6.3 A third state: measurement instability
+Gap and glut are states of the evidence. There is a third state that belongs to the instrument, and conflating it with either produces a wrong response.
+A relation is unstable when repeated measurement of the same pair, under the same conditions, yields different coordinates. This is neither a gap (a stable measurement has been taken; there simply is not evidence about the relation yet) nor a glut (the disagreement is between measurements, not between evidence).
+The right response differs from both. A gap warrants investigation; a glut warrants scoping or non liquet; instability warrants withdrawing the measurement and investigating the instrument. Treating instability as a glut records a contested relation where none was established. Treating it as a gap invites re-measurement that will produce the same instability.
+Instability is the relational form of the companion paper's highest-severity failure — claim instability, where the same nominal claim yields inconsistent estimates across probing methods. Here it is cheaper to detect, because relations can be re-measured on demand while claims must be probed by expensive methods. A store showing widespread relational instability has a claim-individuation problem that T0.1 may have missed at its chosen granularity.
+6.4 A defect should be visible on both axes
+An instrument check that costs nothing to state and is worth stating.
+If two claims genuinely stand in a relation, the relation should be detectable on both axes — not with the same magnitude, but consistently in sign. A pair that reads as polar on the functional axis and as unrelated on the structural axis is either a real relation one instrument is missing, or an artifact of the instrument that found it.
+Cross-axis agreement corroborates a relation; single-axis detection is a candidate, not a finding. Persistent single-axis detection concentrated in one region of the surface is a signal about the instrument rather than about the store, and is chargeable against the measurement configuration.
+This does not require the axes to correlate globally — §9.3 requires the opposite. It requires that when a relation is present, both instruments register something. Global independence with local co-detection is exactly what two genuine access modes to one underlying property look like.
+7. Authority
+7.1 Resolution has positive authority, necessarily
+The companion paper's governance layer is removal-only: it may suspend, refuse, decline to promote, void, and record, and it may not assert. That constraint is what makes the whole architecture bounded.
+Resolution cannot have it. Producing a relational description is producing content that did not previously exist, and a component that only subtracts cannot compare. This is not a weakening of the principle — it is what distinguishes the two limbs. A generative structure assembled from constraining machinery is not a weak generative structure; it is not one.
+The question is therefore not how to make resolution removal-only, but how to bound a component that necessarily asserts.
+7.2 The bounding already exists
+The companion paper contains exactly one operation with positive authority — abstractive synthesis — and works out that operation's bounding in detail. Abstraction is a resolution operation appearing inside the governance paper, which is why it sits uncomfortably there and resists the bounding technique the rest of that paper relies on.
+Its bounding transfers directly:
+Enter at (0,0). A synthesized product does not inherit the evidence of what it was synthesized from. A relational description likewise inherits nothing from the claims it relates.
+No citation until promoted. Retrievable, but not usable as support until it has earned its own record.
+Declared scope, scored by coverage. The product declares what it covers, and its evidence is measured against the declared scope rather than against its own distribution. Bounded from both directions: over-declaring is exposed by coverage measurement; under-declaring strips the generality that motivated the product.
+Sources retained until coverage. What was summarized is kept until the summary's evidence covers its declared scope, so re-derivation stays possible.
+7.3 The selection axis, and why resolution escapes what abstraction does not
+The companion paper cannot fully bound abstraction: the content of a synthesized claim can be bounded, but its selection cannot, because the claim was drawn from an unbounded space of possible summaries and the alternatives were never enumerated.
+Resolution does not have this problem, and the reason is §5.1.
+A relational description is not chosen from an unbounded space. It is a coordinate computed from two measurements over a pair that already exists in the store. There is no alternative relation that might have been selected instead, because nothing was selected — the pair's position on the surface is determined by d_f and d_s, and the only discretion is in the measures themselves, which are fixed policy subject to the companion paper's transmutation and lineage rules.
+This is what the discipline in §5.1 buys, and the cost of abandoning it is specific. A relation assigned from a taxonomy has an unbounded selection axis and inherits abstraction's unresolvable problem. A relation computed as a coordinate does not. The choice between a label set and a measurement surface determines whether the second limb can be bounded at all.
+The bound depends on comparing only pairs that exist. If resolution were permitted to generate candidate pairs — to hypothesize claims that would stand in interesting relations to existing ones — the selection axis re-opens immediately and the bound is lost. That restriction is what makes the layer safe and it is also what caps its reach; §9.6 notes where the restriction becomes load-bearing at second order.
+8. Individuation
+8.1 The degenerate case is the important one
+d_f low in both directions and d_s low is not a relation. It is the finding that two stored entries are one claim, and it is the answer to the companion paper's largest unsecured assumption.
+That paper defines a claim as an individuable behavioral abstraction and provisionally operationalizes it as a cluster of entries co-activating above threshold, while acknowledging that whether such clusters are stable is untested and that the substrate is a specification without a constructor. Resolution is the constructor. Two entries are one claim when they do the same work in both directions and are built the same way, which is a measurement rather than a stipulation.
+8.2 The circularity is a fixed point
+Claims are defined by position in the dependency graph, and the graph connects claims. This is circular, and the circularity is productive rather than vicious: it is a fixed-point problem, solvable by iteration from a rough initial segmentation rather than by definition from first principles.
+The loop's function is convergence of claim individuation by iteration. Governance supplies a rough initial segmentation; resolution refines it by comparison; the conjunction validates; the product returns as evidence rather than as constraint; repeat.
+Two consequences. Coherence improvement is the observable, and individuation convergence is the mechanism — measuring coherence without measuring individuation stability measures a symptom. And a fixed-point iteration saturates, which supplies the discriminating prediction: genuine reorganization of a fixed corpus approaches a limit, while a self-agreement loop does not.
+9. Open Problems
+9.1 The structural measure is two components, not a measure
+Exclusion density and symmetry order both survive the ledger-blanking constraint and neither is sufficient. What else is admissible is the paper's largest gap. Candidates worth examining: path-shape distributions in the local subgraph, edge-type composition without provenance weighting, and stable feature-composition identity if the underlying feature stability is ever established.
+9.2 Whether asymmetry is fully informative
+§3.3 establishes that relations are directed and that the asymmetry between B|A and A|B identifies generalization. Whether the full directed structure the companion paper's support edges require is recoverable from substitution asymmetry alone — or whether some directed relations are invisible to it — is untested.
+9.3 The correspondence question is deferred
+Whether the functional and structural axes pick out the same units is the first question requiring both limbs' output simultaneously, and it belongs to the third paper. It is not merely deferred for convenience: the cross-axis correlation is the measurable form of this limb's closure condition.
+If structural individuation is predictable from functional individuation, resolution tells the conjunction nothing that governance had not already said — a channel transmitting with nothing crossing it. That is not the finding that resolution is unnecessary; it is the finding that resolution's channel does not close.
+The prediction runs against the architecture, which is the right direction. This program requires the two axes to come apart.
+One refinement, which the third paper should absorb. A binary reading of the cross-axis correlation is too coarse. Two instruments can access one underlying property and still each carry information the other does not, in which case correlation is moderate rather than either high or low, and the closure test belongs on the residual after accounting for the shared component rather than on the raw correlation. §6.4's local co-detection requirement and this global independence requirement are compatible precisely under that reading.
+9.4 Locality, and what anchoring does not fix
+Two related limitations, now distinguished.
+Scope derivation from observed invocation means relations among rarely-retrieved claims are poorly resolved, and rare knowledge is often the knowledge that matters most. §5.2 records the result as blind spots on the surface. Whether the relational layer needs its own analogue of the companion paper's rarity floor is unexamined.
+Structural confinement (§5.6) is the deeper version and is only partly repaired by anchoring. Anchors make distant pairs placeable; they do not make distant pairs proposed. Something still has to decide that a pair drawn from two unrelated regions is worth measuring, and nothing here does. Anchoring converts an impossibility into a cost, which is progress and is not a solution — and it pushes the problem into §9.5, where it becomes the same triage question.
+9.5 Cost, now worse
+Every measure here is pairwise, and §3.3's directedness doubles the space: the surface is over ordered pairs. Nothing above addresses which pairs are worth comparing. The companion paper's salience machinery is the obvious source of a triage function, but salience is defined over candidates and evidence, not over pairs, and the translation is not written.
+9.6 Whether the second-order layer needs these axes or different ones
+The third paper's second-order resolution layer compares relations to relations, and assumes the two axes transpose unchanged. Two reasons to doubt that, one of which resolves a problem that paper flags as blocking.
+A third axis appears at second order that does not exist at first. Claims within a store share a domain by construction, so domain distance is not a free variable when comparing claims and does not need an axis. Relations do not share a domain: the relata of one relation may sit in an entirely different region from the relata of another. Domain distance is therefore an independent variable at second order — and it is not captured by structural distance, since two relations can have identical local shape in maximally distant regions.
+It is also the variable that carries the most information there. Deep analogy is relational correspondence in the absence of domain correspondence, so high domain distance with low functional distance is precisely the interesting region, and a two-axis surface cannot express it.
+The directedness result bounds second-order s
