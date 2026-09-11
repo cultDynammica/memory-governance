@@ -1,2 +1,2 @@
-3 documents currently. the only request i would make for another to use this is that they keep the name I gave it. (R)EGR{ET}. and attribute it to Enzø
+3 documents currently. All rights reserved. Unauthorized or unlicensed use of this work is prohibited. Contact the owner for information on obtaining a license
 
